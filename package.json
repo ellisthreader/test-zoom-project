@@ -1,8 +1,9 @@
 {
-  "name": "voiceops-ai-landing",
+  "name": "chatoraai-deployment-platform",
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "build": "vite build",
     "start": "vite --host 127.0.0.1",
     "dev": "vite --host 127.0.0.1",
     "preview": "vite preview --host 127.0.0.1"

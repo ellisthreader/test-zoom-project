@@ -1,27 +1,23 @@
-# VoiceOps AI Landing Page
+# ChatoraAi
 
-Original enterprise AI support and voice-agent landing page demo built as a
-test project for Applied AI Engineer interview preparation.
+ChatoraAi is a focused product showcase for a voice agent deployment platform.
+It presents the software as a real B2B tool for moving AI voice agents from
+pilot to production with evidence.
 
-This project follows the high-level structure and enterprise product-page
-conventions of an AI virtual-agent page: global nav, product subnav, centered
-hero, video-style product media, pilot-to-production flow, integration
-architecture, capability tabs, voice AI callout, use cases, production-readiness
-evaluations, customer proof, resources, contact form, FAQ, and footer.
+## Product Workflow
 
-It intentionally does not use Zoom logos, copy, screenshots, videos, or
-trademarks. It uses an original brand, original text, and generated local media
-for a similar product category: AI customer support automation with voice
-agents, integrations, guardrails, evaluations, and deployment readiness.
+- Customer workspace setup for goals, channels, guardrails, and launch criteria.
+- Enterprise integration mapping for CRM, telephony, knowledge, and helpdesk systems.
+- Voice tuning controls for provider selection, response-start latency, and barge-in behavior.
+- Evaluation suite with scripted and adversarial scenarios.
+- Deployment insights that turn field gaps into reusable platform improvements.
+- Pilot-to-production handoff report generation.
 
-## Job-relevant signals
+## Brand Direction
 
-- Pilot-to-production deployment motion for strategic customers.
-- CRM, helpdesk, billing, telephony, knowledge-base, and observability flows.
-- Voice AI tuning language: ASR, TTS, turn-taking, silence handling, IVR, and warm transfer.
-- Evaluation gates with scripted/adversarial scenarios and measurable outcomes.
-- Product-gap capture and handoff/playbook positioning.
-- Contact-center terminology: containment, routing, supervisor notes, QA traces, and escalation.
+The ChatoraAi brand uses a clean navy, blue, cyan, and white system. The logo is
+stored at `assets/chatoraai-logo.svg` and avoids generic AI visual tropes such
+as heavy purple gradients or decorative blobs.
 
 ## Run
 
@@ -31,3 +27,9 @@ npm run dev
 ```
 
 Then open the local URL printed by Vite.
+
+## Build
+
+```bash
+npm run build
+```
