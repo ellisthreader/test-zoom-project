@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Vexa Virtual Agent is an original AI customer support and voice-agent landing page demo."
+    />
+    <title>Vexa Virtual Agent | AI customer support automation</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="global-header">
+      <div class="utility-bar">
+        <a href="#">Support</a>
+        <a href="#">1.888.799.9666</a>
+        <a href="#">Contact Sales</a>
+      </div>
+
+      <div class="main-nav">
+        <a class="brand" href="#" aria-label="Vexa home">
+          <span class="brand-word">vexa</span>
+        </a>
+        <nav class="desktop-nav" aria-label="Main navigation">
+          <a href="#platform">Products</a>
+          <a href="#industries">Solutions</a>
+          <a href="#resources">Resources</a>
+          <a href="#plans">Plans & Pricing</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="link-button" href="#contact">Sign In</a>
+          <a class="outline-button" href="#contact">Contact Sales</a>
+          <a class="solid-button" href="#demo">Request a Demo</a>
+        </div>
+        <button class="menu-button" type="button" aria-label="Open navigation" data-menu-button>
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+
+      <nav class="mobile-nav" aria-label="Mobile navigation" data-mobile-nav>
+        <a href="#platform">Products</a>
+        <a href="#voice">Voice AI</a>
+        <a href="#industries">Solutions</a>
+        <a href="#resources">Resources</a>
+        <a href="#contact">Contact Sales</a>
+      </nav>
+
+      <div class="product-nav">
+        <a class="product-name" href="#">Vexa Virtual Agent</a>
+        <div>
+          <a href="#features">Features</a>
+          <a href="#deployment">Deployment</a>
+          <a href="#voice">Voice AI</a>
+          <a href="#industries">Use cases</a>
+          <a href="#readiness">Readiness</a>
+          <a href="#resources">Resources</a>
+          <a href="#faq">FAQ</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-inner">
+          <p class="eyebrow">AI virtual agent</p>
+          <h1>Deliver fast, accurate support with AI agents.</h1>
+          <p class="hero-lede">
+            Resolve common customer questions across chat and voice with virtual
+            agents that understand your knowledge base, use business tools, and
+            hand off safely to your team.
+          </p>
+          <div class="hero-actions">
+            <a class="solid-button hero-button" href="#contact">Contact sales</a>
+            <a class="outline-button hero-button" href="#demo">Try it yourself</a>
+          </div>
+        </div>
+        <div class="hero-media-shell" id="demo">
+          <video autoplay muted loop playsinline poster="/assets/agent-hero-clean.png">
+            <source src="/assets/agent-hero-loop.mp4" type="video/mp4" />
+          </video>
+          <div class="floating-card resolve-card">
+            <span class="pulse-dot"></span>
+            <div>
+              <strong>AI response ready</strong>
+              <p>Answer grounded in billing policy and account context.</p>
+            </div>
+          </div>
+          <div class="floating-card metric-card">
+            <strong>73%</strong>
+            <span>self-service resolution</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="trust-row" aria-label="Business systems">
+        <span>Connect your support stack</span>
+        <strong>CRM</strong>
+        <strong>Helpdesk</strong>
+        <strong>Billing</strong>
+        <strong>Knowledge base</strong>
+        <strong>Telephony</strong>
+      </section>
+
+      <section class="intro-panel" id="platform">
+        <div class="intro-copy">
+          <p class="eyebrow">Purpose-built for customer experience</p>
+          <h2>Put AI at the front door of support without losing control.</h2>
+        </div>
+        <div class="intro-text">
+          <p>
+            Vexa Virtual Agent answers routine questions, gathers context,
+            completes approved workflows, and brings in a human when policy,
+            identity, or customer sentiment requires it.
+          </p>
+        </div>
+      </section>
+
+      <section class="deployment-section" id="deployment">
+        <div class="section-heading centered">
+          <p class="eyebrow">Pilot to production</p>
+          <h2>Designed for real customer deployments, not just demos.</h2>
+        </div>
+        <div class="deployment-grid">
+          <article>
+            <span>01</span>
+            <h3>Configure the customer environment</h3>
+            <p>Load the support policies, escalation rules, approved answers, and customer journeys for one tenant.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Connect the operating systems</h3>
+            <p>Wire CRM, helpdesk, billing, telephony, and knowledge-base tools into one agent workflow.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Tune the voice experience</h3>
+            <p>Measure ASR, TTS, turn-taking, interruption handling, and spoken response length before launch.</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3>Validate and hand off</h3>
+            <p>Run adversarial scenarios, capture product gaps, and produce the playbook for operations teams.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="architecture-section">
+        <div class="architecture-copy">
+          <p class="eyebrow">Integration architecture</p>
+          <h2>Connect once, then automate the support journey.</h2>
+          <p>
+            The demo is framed like a customer deployment: APIs, webhooks,
+            authenticated tools, logs, traces, and fallback paths are visible
+            from the same operating view.
+          </p>
+        </div>
+        <div class="architecture-board">
+          <div class="arch-row">
+            <span>CRM</span>
+            <strong>Customer profile, entitlement, account owner</strong>
+            <em>API lookup</em>
+          </div>
+          <div class="arch-row">
+            <span>Telephony</span>
+            <strong>Inbound call, IVR intent, warm transfer</strong>
+            <em>media stream</em>
+          </div>
+          <div class="arch-row">
+            <span>Knowledge</span>
+            <strong>Policy retrieval, citations, approved answers</strong>
+            <em>vector search</em>
+          </div>
+          <div class="arch-row">
+            <span>Helpdesk</span>
+            <strong>Ticket create, queue routing, supervisor notes</strong>
+            <em>webhook</em>
+          </div>
+          <div class="arch-row">
+            <span>Observability</span>
+            <strong>Tool failures, latency, transcripts, QA traces</strong>
+            <em>event log</em>
+          </div>
+        </div>
+      </section>
+
+      <section class="section feature-tabs" id="features">
+        <div class="section-heading centered">
+          <p class="eyebrow">Key capabilities</p>
+          <h2>Everything needed to deploy a customer-ready virtual agent.</h2>
+        </div>
+        <div class="tabs-layout" data-tabs>
+          <div class="tabs-list" role="tablist" aria-label="Feature tabs">
+            <button class="tab is-active" type="button" data-tab="answers">
+              <span>01</span>
+              Accurate answers
+            </button>
+            <button class="tab" type="button" data-tab="actions">
+              <span>02</span>
+              Action workflows
+            </button>
+            <button class="tab" type="button" data-tab="handoff">
+              <span>03</span>
+              Human handoff
+            </button>
+            <button class="tab" type="button" data-tab="analytics">
+              <span>04</span>
+              Analytics
+            </button>
+          </div>
+          <div class="tabs-stage">
+            <article class="tab-panel is-active" data-panel="answers">
+              <h3>Ground every answer in approved knowledge.</h3>
+              <p>
+                Search help-center content, policies, release notes, and live
+                account context before responding to customers.
+              </p>
+              <div class="mini-browser">
+                <div class="browser-dots"><span></span><span></span><span></span></div>
+                <div class="answer-bubble">Refund policy found. Customer plan verified.</div>
+                <div class="source-row">Sources: billing policy, invoice history, support macro</div>
+              </div>
+            </article>
+            <article class="tab-panel" data-panel="actions">
+              <h3>Let agents complete safe support tasks.</h3>
+              <p>
+                Open tickets, update case notes, collect customer details, and
+                prepare approvals for sensitive account changes.
+              </p>
+              <div class="workflow-list">
+                <span>Identify customer</span>
+                <span>Check subscription</span>
+                <span>Create ticket</span>
+                <span>Queue approval</span>
+              </div>
+            </article>
+            <article class="tab-panel" data-panel="handoff">
+              <h3>Route complex issues to the right person.</h3>
+              <p>
+                Transfer angry, sensitive, high-value, or out-of-policy
+                conversations with transcript, summary, and recommended next step.
+              </p>
+              <div class="handoff-card">
+                <strong>Escalation recommended</strong>
+                <p>Customer requests account cancellation and refund exception.</p>
+              </div>
+            </article>
+            <article class="tab-panel" data-panel="analytics">
+              <h3>Measure performance before and after launch.</h3>
+              <p>
+                Track resolution rate, containment, CSAT, latency, tool failures,
+                policy violations, and knowledge gaps from one dashboard.
+              </p>
+              <div class="analytics-grid">
+                <div><strong>91%</strong><span>correct routing</span></div>
+                <div><strong>1.2s</strong><span>voice latency</span></div>
+                <div><strong>0</strong><span>critical issues</span></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="voice-section" id="voice">
+        <div class="voice-visual">
+          <img src="/assets/voice-lab-clean.png" alt="AI voice agent testing dashboard" />
+        </div>
+        <div class="voice-copy">
+          <p class="eyebrow">Voice AI</p>
+          <h2>Make phone support feel natural, fast, and safe.</h2>
+          <p>
+            Tune ASR accuracy, TTS voice, response timing, silence handling,
+            interruptions, summaries, IVR routing, and escalation triggers for
+            real customer calls.
+          </p>
+          <div class="voice-metrics">
+            <div><strong>310ms</strong><span>speech detection</span></div>
+            <div><strong>720ms</strong><span>spoken response</span></div>
+            <div><strong>24/7</strong><span>coverage</span></div>
+          </div>
+          <a class="solid-button" href="#contact">Explore voice agents</a>
+        </div>
+      </section>
+
+      <section class="try-band">
+        <div>
+          <p class="eyebrow">Try it yourself</p>
+          <h2>See how an AI agent resolves a support request.</h2>
+          <p>
+            Run a billing, account, or product scenario and watch the agent
+            retrieve knowledge, call tools, and decide whether to escalate.
+          </p>
+        </div>
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <span class="pulse-dot"></span>
+            Live scenario
+          </div>
+          <p class="customer-line">"I was charged twice and want a refund."</p>
+          <div class="scenario-steps">
+            <span>Policy checked</span>
+            <span>Invoice matched</span>
+            <span>Approval queued</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section use-cases" id="industries">
+        <div class="section-heading centered">
+          <p class="eyebrow">Use cases</p>
+          <h2>One powerful virtual agent. Multiple ways to support.</h2>
+        </div>
+        <div class="use-case-tabs" data-tabs>
+          <div class="use-case-tablist" role="tablist" aria-label="Use-case tabs">
+            <button class="use-tab is-active" type="button" data-tab="self-service">
+              Self-service support
+            </button>
+            <button class="use-tab" type="button" data-tab="receptionist">
+              AI receptionist
+            </button>
+            <button class="use-tab" type="button" data-tab="it-helpdesk">
+              Internal IT helpdesk
+            </button>
+          </div>
+
+          <article class="use-case-panel is-active" data-panel="self-service">
+            <div class="use-case-copy">
+              <span class="label-pill">Customer support</span>
+              <h3>Resolve common requests before they reach the queue.</h3>
+              <p>
+                Let the agent answer billing, account, product, and policy
+                questions across chat and phone while keeping complex or risky
+                cases ready for human review.
+              </p>
+              <div class="showcase-labels">
+                <span>Knowledge retrieval</span>
+                <span>CRM lookup</span>
+                <span>Ticket creation</span>
+                <span>Human handoff</span>
+              </div>
+            </div>
+            <div class="support-showcase">
+              <div class="showcase-top">
+                <span class="mini-dot"></span>
+                Self-service conversation
+              </div>
+              <div class="chat-line customer">Why was I charged twice?</div>
+              <div class="tool-chip">Tool: invoice history matched</div>
+              <div class="tool-chip">Tool: refund policy checked</div>
+              <div class="chat-line agent">I found the renewal and payment retry. I created a billing ticket with the invoice trace.</div>
+              <div class="showcase-metrics">
+                <div><strong>68%</strong><span>contained</span></div>
+                <div><strong>0</strong><span>policy issues</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="use-case-panel" data-panel="receptionist">
+            <div class="use-case-copy">
+              <span class="label-pill">Voice entry point</span>
+              <h3>Greet callers, understand intent, and route them correctly.</h3>
+              <p>
+                Give every inbound caller a fast first response. The agent can
+                identify intent, capture messages, answer simple questions, and
+                transfer with context.
+              </p>
+              <div class="showcase-labels">
+                <span>Live voice</span>
+                <span>Intent routing</span>
+                <span>Message capture</span>
+                <span>Warm transfer</span>
+              </div>
+            </div>
+            <div class="support-showcase receptionist-card">
+              <div class="phone-orb">☎</div>
+              <div class="voice-bars" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span>
+              </div>
+              <div class="route-card">
+                <strong>Route recommended</strong>
+                <span>Billing team · high confidence</span>
+              </div>
+              <div class="showcase-metrics">
+                <div><strong>720ms</strong><span>spoken reply</span></div>
+                <div><strong>91%</strong><span>routing accuracy</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="use-case-panel" data-panel="it-helpdesk">
+            <div class="use-case-copy">
+              <span class="label-pill">Employee support</span>
+              <h3>Automate IT helpdesk triage with clear audit trails.</h3>
+              <p>
+                Connect the agent to ITSM workflows so it can collect symptoms,
+                suggest fixes, open tickets, update status, and escalate outages
+                or access-sensitive requests.
+              </p>
+              <div class="showcase-labels">
+                <span>ITSM ticket</span>
+                <span>Access policy</span>
+                <span>Device triage</span>
+                <span>Audit trail</span>
+              </div>
+            </div>
+            <div class="support-showcase helpdesk-card">
+              <div class="ticket-row"><strong>VPN access issue</strong><span>Priority: medium</span></div>
+              <div class="ticket-row"><strong>Device check</strong><span>Passed</span></div>
+              <div class="ticket-row"><strong>Identity gate</strong><span>Approval required</span></div>
+              <div class="showcase-metrics">
+                <div><strong>3</strong><span>tools used</span></div>
+                <div><strong>18</strong><span>checks passed</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="customer-proof">
+        <div class="quote-card">
+          <p class="eyebrow">Customer story</p>
+          <blockquote>
+            "Our support team uses Vexa to contain routine requests and route
+            sensitive cases with the full customer context attached."
+          </blockquote>
+          <span>VP of Customer Experience, AcmeCloud</span>
+        </div>
+        <div class="proof-stats">
+          <div><strong>38%</strong><span>lower ticket volume</span></div>
+          <div><strong>2.4x</strong><span>faster first response</span></div>
+          <div><strong>18</strong><span>go-live checks passed</span></div>
+        </div>
+      </section>
+
+      <section class="readiness-section" id="readiness">
+        <div class="readiness-copy">
+          <p class="eyebrow">Production readiness</p>
+          <h2>Prove the agent is safe enough for daily customer use.</h2>
+          <p>
+            Before go-live, the platform tests scripted tasks and adversarial
+            scenarios, logs every tool call, and turns failures into concrete
+            fixes for product and engineering teams.
+          </p>
+          <div class="readiness-checks">
+            <span>Resolution rate</span>
+            <span>Containment</span>
+            <span>CSAT signal</span>
+            <span>Escalation accuracy</span>
+            <span>Policy violations</span>
+            <span>Voice latency</span>
+          </div>
+        </div>
+        <div class="readiness-board">
+          <div class="board-header">
+            <strong>Evaluation gate</strong>
+            <span>18 / 20 checks passing</span>
+          </div>
+          <div class="eval-row pass">
+            <span>Billing duplicate charge</span>
+            <strong>Passed</strong>
+          </div>
+          <div class="eval-row pass">
+            <span>Prompt injection refund attempt</span>
+            <strong>Blocked</strong>
+          </div>
+          <div class="eval-row review">
+            <span>Angry caller handoff timing</span>
+            <strong>Review</strong>
+          </div>
+          <div class="eval-row pass">
+            <span>Knowledge-base answer citation</span>
+            <strong>Passed</strong>
+          </div>
+          <div class="gap-card">
+            <span>Product gap captured</span>
+            <p>Escalation summary should include last verified identity signal before warm transfer.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section resources" id="resources">
+        <div class="section-heading centered">
+          <p class="eyebrow">Resources</p>
+          <h2>Learn how to move from pilot to production.</h2>
+        </div>
+        <div class="resource-grid">
+          <article>
+            <span>Guide</span>
+            <h3>Deploying AI agents for customer support</h3>
+            <p>Plan knowledge, tools, escalation, QA, and rollout phases.</p>
+            <a href="#contact">Read guide</a>
+          </article>
+          <article>
+            <span>Checklist</span>
+            <h3>Voice-agent readiness checklist</h3>
+            <p>Review latency, barge-in, transcripts, policy, and handoff gates.</p>
+            <a href="#contact">Get checklist</a>
+          </article>
+          <article>
+            <span>Template</span>
+            <h3>Evaluation scenario library</h3>
+            <p>Test billing, identity, angry callers, prompt injection, and edge cases.</p>
+            <a href="#contact">View template</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="contact-section" id="contact">
+        <div class="contact-copy">
+          <p class="eyebrow">Contact sales</p>
+          <h2>Ready to build your virtual agent?</h2>
+          <p>
+            Tell us about your support channels, integrations, knowledge base,
+            and the workflows you want to automate.
+          </p>
+        </div>
+        <form class="contact-form">
+          <div class="field-row">
+            <label>First name<input type="text" /></label>
+            <label>Last name<input type="text" /></label>
+          </div>
+          <label>Work email<input type="email" placeholder="you@company.com" /></label>
+          <label>Company<input type="text" /></label>
+          <label>
+            Primary channel
+            <select>
+              <option>Chat and voice</option>
+              <option>Chat only</option>
+              <option>Voice only</option>
+              <option>Not sure yet</option>
+            </select>
+          </label>
+          <label>
+            What would you like to automate?
+            <textarea rows="4"></textarea>
+          </label>
+          <button class="solid-button" type="button">Submit</button>
+        </form>
+      </section>
+
+      <section class="section faq" id="faq">
+        <div class="section-heading centered">
+          <p class="eyebrow">Frequently asked questions</p>
+          <h2>Questions about AI virtual agents.</h2>
+        </div>
+        <div class="faq-list">
+          <details open>
+            <summary>Can the agent connect to our CRM and helpdesk?</summary>
+            <p>Yes. The demo models CRM, helpdesk, billing, knowledge-base, and telephony connections.</p>
+          </details>
+          <details>
+            <summary>Can it handle voice calls?</summary>
+            <p>Yes. The voice workflow includes live transcripts, turn timing, spoken responses, and escalation.</p>
+          </details>
+          <details>
+            <summary>How do teams prevent risky actions?</summary>
+            <p>Sensitive workflows use policy checks, approval queues, human handoff, and audit trails.</p>
+          </details>
+          <details>
+            <summary>How do we know when the agent is ready?</summary>
+            <p>Run scenario evaluations and review resolution, containment, escalation, latency, and policy metrics.</p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-brand">
+        <a class="brand" href="#">
+          <span class="brand-word">vexa</span>
+        </a>
+        <p>Original AI virtual-agent demo. Not affiliated with Zoom.</p>
+      </div>
+      <div class="footer-columns">
+        <div>
+          <h4>Products</h4>
+          <a href="#features">Virtual Agent</a>
+          <a href="#voice">Voice AI</a>
+          <a href="#platform">Analytics</a>
+        </div>
+        <div>
+          <h4>Solutions</h4>
+          <a href="#industries">Billing</a>
+          <a href="#industries">Account support</a>
+          <a href="#industries">Product help</a>
+        </div>
+        <div>
+          <h4>Resources</h4>
+          <a href="#resources">Guides</a>
+          <a href="#faq">FAQ</a>
+          <a href="#contact">Contact</a>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "voiceops-ai-landing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "vite --host 127.0.0.1",
+    "dev": "vite --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
