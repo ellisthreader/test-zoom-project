@@ -94,7 +94,11 @@ handoff report."
 ## Product Claims To Keep Clear
 
 - ChatoraAi is presented as a product concept/prototype.
-- Current tool calls and metrics are simulated.
+- Current tool calls and metrics are simulated unless the backend provider keys
+  are configured.
+- The homepage demo can request a real outbound test call only when the backend
+  has outbound telephony credentials configured. Otherwise it returns setup
+  status.
 - The UI demonstrates the workflow and operating model.
 - A production build would add real authentication, telephony, retrieval,
   connectors, observability, and a backend evaluation harness.

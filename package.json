@@ -2,13 +2,40 @@
   "name": "chatoraai-deployment-platform",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "vite build",
-    "start": "vite --host 127.0.0.1",
-    "dev": "vite --host 127.0.0.1",
-    "preview": "vite preview --host 127.0.0.1"
+    "build": "tsc --noEmit && vite build",
+    "client": "vite --host 0.0.0.0",
+    "server": "tsx server/start.ts",
+    "start": "npm run dev",
+    "dev": "node scripts/dev.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "video:preview": "remotion studio remotion/index.ts",
+    "video:render": "remotion render remotion/index.ts ChatoraLaunchVideo public/chatoraai-launch-video.mp4 --codec=h264",
+    "test": "tsx --test server/ai/client.test.ts server/ai/orchestrator.test.ts server/voice/elevenlabs.test.ts server/zoom/webhook.test.ts server/adapters/integrations.test.ts server/telephony/audio-store.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
     "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.478",
+    "@remotion/renderer": "^4.0.478",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "framer-motion": "^12.40.0",
+    "openai": "^6.42.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "remotion": "^4.0.478"
   }
 }

@@ -44,23 +44,31 @@ The site is organized around the ChatoraAi workflow:
 
 ## Current Implementation
 
-- Static Vite app.
-- Product-first ChatoraAi branding.
+- React and TypeScript Vite app.
+- Customer-first setup dashboard for configuring a production voice agent.
 - SVG logo asset.
-- Sectioned product workflow.
-- Interactive scenario selector.
-- Transcript, tool trace, and evaluation tabs.
-- Voice tuning controls.
-- Dynamic readiness, containment, resolution, and deployment state.
-- Handoff report generation and copy action.
+- Workspace setup, connector setup, agent builder, voice lab, evaluation, and
+  handoff sections.
+- Interactive connector state, readiness scoring, voice controls, evaluation
+  scenarios, and launch-pack generation.
+- TypeScript Express AI backend foundation with chat, ticket extraction, builder,
+  realtime session, and telephony webhook endpoints.
+- Mockable CRM, helpdesk, and knowledge-base adapters.
+- OpenAI Responses integration with deterministic fallback behavior when no API
+  key is configured.
+- Focused backend tests for chat field collection, ticket extraction, and AI
+  builder planning.
+- Zoom Contact Center webhook adapter for Virtual Agent deployment events,
+  URL validation, signature verification, transcript ingestion, and AI ticket
+  creation.
 
 ## Production Expansion
 
 The next engineering build should add:
 
-1. TypeScript models for workspaces, scenarios, tool calls, evaluations, and
-   reports.
-2. Python FastAPI backend with mockable adapters:
+1. Shared TypeScript models for workspaces, scenarios, tool calls, evaluations,
+   and reports.
+2. Production adapters:
    - `/crm/customer`
    - `/billing/invoices`
    - `/kb/search`

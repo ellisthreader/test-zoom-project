@@ -1,0 +1,22 @@
+[
+  {
+    "id": "refunds",
+    "title": "Refund policy",
+    "body": "Refund requests are accepted within 30 days of purchase. Agents should collect the order number, reason for the refund, and preferred contact method before creating a billing ticket."
+  },
+  {
+    "id": "delivery",
+    "title": "Delivery and missed orders",
+    "body": "For delayed or missing deliveries, collect the order number, delivery postcode, courier name if known, and whether the customer paid for express delivery. Express delivery failures should be high priority."
+  },
+  {
+    "id": "appointments",
+    "title": "Appointment changes",
+    "body": "Customers can reschedule appointments up to 24 hours before the booked time. Agents should confirm the original date, desired date, and customer phone number."
+  },
+  {
+    "id": "handoff",
+    "title": "Human escalation",
+    "body": "Escalate to a human when the customer asks for one, is angry, mentions legal action, has a payment problem, requests cancellation, or when the AI confidence is low."
+  }
+]

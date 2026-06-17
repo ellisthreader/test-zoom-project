@@ -1,0 +1,18 @@
+[
+  {
+    "id": "cus_001",
+    "name": "Amelia Carter",
+    "phone": "+447700900111",
+    "email": "amelia@example.com",
+    "tier": "standard",
+    "openTickets": []
+  },
+  {
+    "id": "cus_002",
+    "name": "Noah Patel",
+    "phone": "+447700900222",
+    "email": "noah@example.com",
+    "tier": "vip",
+    "openTickets": ["tick_1001"]
+  }
+]
