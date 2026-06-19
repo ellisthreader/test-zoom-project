@@ -9,7 +9,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import chatoraLogoUrl from "../../assets/chatoraai-logo.svg";
+import relayclarityLogoUrl from "../../assets/relayclarity-logo.svg";
 
 const colors = {
   ink: "#101412",
@@ -158,7 +158,7 @@ const Brand: React.FC<{ dark?: boolean }> = ({ dark = false }) => (
               fontWeight: 880,
             }}
           >
-            Chatora<span style={{ color: "#6ee7f9" }}>AI</span>
+            Relay<span style={{ color: "#6ee7f9" }}>Clarity</span>
           </strong>
           <span style={{ display: "block", marginTop: 7, color: "#d8e6df", fontSize: 16, fontWeight: 760 }}>
             Voice agent deployment platform
@@ -174,7 +174,7 @@ const Brand: React.FC<{ dark?: boolean }> = ({ dark = false }) => (
           alignItems: "center",
         }}
       >
-        <Img src={chatoraLogoUrl} style={{ width: "100%", height: "auto" }} />
+        <Img src={relayclarityLogoUrl} style={{ width: "100%", height: "auto" }} />
       </div>
     )}
   </div>
@@ -424,7 +424,7 @@ const SceneChecks: React.FC = () => (
     <Brand dark />
     <div style={{ position: "absolute", left: 110, top: 225 }}>
       <FadeSlide delay={8}>
-        <Kicker dark>ChatoraAI checks the real workflow</Kicker>
+        <Kicker dark>RelayClarity checks the real workflow</Kicker>
         <BigTitle dark max={820}>Test the agent like it is already live.</BigTitle>
       </FadeSlide>
     </div>
@@ -552,7 +552,7 @@ const SceneFinal: React.FC = () => (
       }}
     >
       <FadeSlide delay={8}>
-        <Kicker dark>ChatoraAI</Kicker>
+        <Kicker dark>RelayClarity</Kicker>
         <h1
           style={{
             margin: "32px auto 0",
@@ -583,7 +583,7 @@ const SceneFinal: React.FC = () => (
   </Shell>
 );
 
-export const ChatoraLaunchVideo: React.FC = () => {
+export const RelayClarityLaunchVideo: React.FC = () => {
   return (
     <AbsoluteFill style={base}>
       <Sequence from={0} durationInFrames={180}>

@@ -113,7 +113,7 @@ export function createRealtimeClientSecretBody() {
         },
       },
       instructions:
-        'You are ChatoraAi, a customer service voice agent. Ask for missing customer details, answer only from approved knowledge where possible, create structured tickets, and escalate sensitive or low-confidence cases.',
+        'You are RelayClarity, a customer service voice agent. Ask for missing customer details, answer only from approved knowledge where possible, create structured tickets, and escalate sensitive or low-confidence cases.',
     },
   };
 }

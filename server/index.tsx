@@ -1,7 +1,10 @@
 import express from 'express';
 import type { ErrorRequestHandler } from 'express';
 import cors from 'cors';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { config, hasOpenAI } from './config.js';
+import { handleCurrentUser, handleEmailLogin, handleGoogleCallback, handleGoogleStart, handleLogout, requireAuth } from './auth.js';
 import { listKnowledgeBase } from './adapters/kb.js';
 import { listTickets } from './adapters/helpdesk.js';
 import { connectIntegration, finalizeOAuthConnection, getConnectedIntegrations, listIntegrationProviders, testIntegration } from './adapters/integrations.js';
@@ -16,6 +19,12 @@ import type { ZoomWebhookEvent } from './types.js';
 
 export function createApp() {
   const app = express();
+  const distPath = path.join(process.cwd(), 'dist');
+  const indexPath = path.join(distPath, 'index.html');
+
+  if (existsSync(indexPath)) {
+    app.use(express.static(distPath));
+  }
 
   app.use(cors({
     origin: (origin, callback) => {
@@ -26,6 +35,7 @@ export function createApp() {
 
       callback(new Error(`Origin ${origin} is not allowed by CORS`));
     },
+    credentials: true,
   }));
   app.use(express.json({
     limit: '1mb',
@@ -38,13 +48,41 @@ export function createApp() {
   app.get('/api/health', (_req, res) => {
     res.json({
       ok: true,
-      service: 'chatoraai-ai-backend',
+      service: 'relayclarity-ai-backend',
       openai: hasOpenAI() ? 'configured' : 'mock_fallback',
     });
   });
 
   app.get('/api/providers/status', (_req, res) => {
     res.json(getProviderStatus());
+  });
+
+  app.get('/api/auth/me', handleCurrentUser);
+
+  app.post('/api/auth/email', handleEmailLogin);
+
+  app.post('/api/auth/logout', handleLogout);
+
+  app.get('/api/auth/google/start', handleGoogleStart);
+
+  app.get('/api/auth/google/callback', async (req, res, next) => {
+    try {
+      await handleGoogleCallback(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.use('/api/dashboard', (req, res, next) => {
+    if (!requireAuth(req, res)) {
+      return;
+    }
+
+    next();
+  });
+
+  app.get('/api/dashboard/session', (req, res) => {
+    res.json({ user: requireAuth(req, res) });
   });
 
   app.get('/api/kb', (_req, res) => {
@@ -85,13 +123,13 @@ export function createApp() {
 
       res.type('html').send(`<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>ChatoraAI integration connected</title></head>
+  <head><meta charset="utf-8"><title>RelayClarity integration connected</title></head>
   <body>
     <script>
-      window.opener?.postMessage({ type: 'chatoraai.integration.connected', provider: ${JSON.stringify(req.params.provider)}, status: ${JSON.stringify(connection?.status || 'missing_code')} }, '*');
+      window.opener?.postMessage({ type: 'relayclarity.integration.connected', provider: ${JSON.stringify(req.params.provider)}, status: ${JSON.stringify(connection?.status || 'missing_code')} }, '*');
       window.close();
     </script>
-    <p>Integration approved. You can return to ChatoraAI.</p>
+    <p>Integration approved. You can return to RelayClarity.</p>
   </body>
 </html>`);
     } catch (error) {
@@ -172,7 +210,7 @@ export function createApp() {
     const from = req.body.From || req.body.from || 'unknown';
     res.type('text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Thanks for calling ChatoraAi support. I can help create a ticket, answer common questions, or route you to a human.</Say>
+  <Say>Thanks for calling RelayClarity support. I can help create a ticket, answer common questions, or route you to a human.</Say>
   <Gather input="speech" action="/api/telephony/transcript" method="POST" speechTimeout="auto">
     <Say>Please tell me what you need help with.</Say>
   </Gather>
@@ -227,6 +265,12 @@ export function createApp() {
     const status = /required/.test(message) ? 400 : 500;
     res.status(status).json({ error: message });
   };
+
+  if (existsSync(indexPath)) {
+    app.get(/^(?!\/api).*/, (_req, res) => {
+      res.sendFile(indexPath);
+    });
+  }
 
   app.use(errorHandler);
 

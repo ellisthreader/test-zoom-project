@@ -330,7 +330,7 @@ function buildOAuthUrl(provider: IntegrationProvider) {
       client_id: config.hubspotClientId,
       redirect_uri: config.hubspotRedirectUri,
       scope: provider.scopes.join(' '),
-      state: 'chatoraai-dashboard',
+      state: 'relayclarity-dashboard',
     });
     return `https://app.hubspot.com/oauth/authorize?${params.toString()}`;
   }
@@ -341,7 +341,7 @@ function buildOAuthUrl(provider: IntegrationProvider) {
       redirect_uri: config.notionRedirectUri,
       response_type: 'code',
       owner: 'user',
-      state: 'chatoraai-dashboard',
+      state: 'relayclarity-dashboard',
     });
     return `https://api.notion.com/v1/oauth/authorize?${params.toString()}`;
   }
@@ -351,7 +351,7 @@ function buildOAuthUrl(provider: IntegrationProvider) {
       client_id: config.slackClientId,
       scope: provider.scopes.join(','),
       redirect_uri: config.slackRedirectUri,
-      state: 'chatoraai-dashboard',
+      state: 'relayclarity-dashboard',
     });
     return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
   }
@@ -362,7 +362,7 @@ function buildOAuthUrl(provider: IntegrationProvider) {
       client_id: config.stripeClientId,
       scope: provider.scopes[0] || 'read_only',
       redirect_uri: config.stripeRedirectUri,
-      state: 'chatoraai-dashboard',
+      state: 'relayclarity-dashboard',
     });
     return `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
   }

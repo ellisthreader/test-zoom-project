@@ -1,0 +1,8 @@
+<svg width="520" height="160" viewBox="0 0 520 160" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">ClearDBS logo</title>
+  <path d="M76 29L122 47V82C122 110 103 130 76 138C49 130 30 110 30 82V47L76 29Z" fill="#0F5D8F"/>
+  <path d="M55 82L70 97L99 64" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="150" y="87" fill="#FFFFFF" font-family="Inter, Arial, Helvetica, sans-serif" font-size="48" font-weight="900" letter-spacing="-1">Clear</text>
+  <text x="285" y="87" fill="#0F5D8F" font-family="Inter, Arial, Helvetica, sans-serif" font-size="48" font-weight="900" letter-spacing="-1">DBS</text>
+  <text x="153" y="116" fill="#D9F3FF" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18" font-weight="800" letter-spacing="2.8">DISCLOSURE CHECKS</text>
+</svg>

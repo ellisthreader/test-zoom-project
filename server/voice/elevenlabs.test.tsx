@@ -4,11 +4,11 @@ import { synthesizeSpeech } from './elevenlabs.js';
 
 test('ElevenLabs speech adapter returns mock metadata without an API key', async () => {
   const result = await synthesizeSpeech({
-    text: 'Thanks for calling ChatoraAi support.',
+    text: 'Thanks for calling RelayClarity support.',
     mock: true,
   });
 
   assert.equal(result.mode, 'mock');
   assert.equal(result.provider, 'elevenlabs');
-  assert.equal(result.estimatedCharacters, 'Thanks for calling ChatoraAi support.'.length);
+  assert.equal(result.estimatedCharacters, 'Thanks for calling RelayClarity support.'.length);
 });

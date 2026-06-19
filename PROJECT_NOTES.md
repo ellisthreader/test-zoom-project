@@ -1,11 +1,11 @@
 # Project Notes
 
-## Most Important Note: ChatoraAi Product Direction
+## Most Important Note: RelayClarity Product Direction
 
-This project should present **ChatoraAi** as the user's own software product.
+This project should present **RelayClarity** as the user's own software product.
 It should not read like a generic portfolio demo or a job-description checklist.
 
-ChatoraAi is a voice agent deployment platform that helps teams:
+RelayClarity is a voice agent deployment platform that helps teams:
 
 - Set up customer deployment workspaces.
 - Connect CRM, telephony, knowledge-base, and helpdesk systems.
@@ -16,11 +16,11 @@ ChatoraAi is a voice agent deployment platform that helps teams:
 
 Brand requirements:
 
-- Use the exact product name `ChatoraAi`.
-- Use a credible B2B company design language.
+- Use the exact product name `RelayClarity`.
+- Use a credible, clean, modern B2B company design language.
 - Avoid overused purple AI gradients, decorative blobs, and vague AI visuals.
 - Keep the interface clean, sectioned, and focused on showing the software workflow.
-- Use `assets/chatoraai-logo.svg` as the product logo.
+- Use `assets/relayclarity-logo.svg` as the product logo.
 
 ## Target Job Description Context
 
@@ -91,6 +91,6 @@ The project should emphasize:
 
 ### Demo Runbook Cross-Reference
 
-Use `DEMO_RUNBOOK.md` as the ChatoraAi product walkthrough script. It explains how to present the software workflow clearly section by section.
+Use `DEMO_RUNBOOK.md` as the RelayClarity product walkthrough script. It explains how to present the software workflow clearly section by section.
 
 Use `IMPLEMENTATION_PLAN.md` as the product build scorecard. It records the brand direction, current software workflow, next production-grade expansion, and known limits.

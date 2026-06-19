@@ -2,7 +2,7 @@ import { config } from './config.js';
 import { createApp } from './index.js';
 
 const server = createApp().listen(config.port, () => {
-  console.log(`ChatoraAi AI backend running on http://127.0.0.1:${config.port}`);
+  console.log(`RelayClarity AI backend running on http://127.0.0.1:${config.port}`);
 });
 
 server.on('error', (error) => {

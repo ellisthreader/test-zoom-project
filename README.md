@@ -1,6 +1,6 @@
-# ChatoraAi
+# RelayClarity
 
-ChatoraAi is a focused product showcase for a voice agent deployment platform.
+RelayClarity is a focused product showcase for a voice agent deployment platform.
 It presents the software as a real B2B tool for moving AI voice agents from
 pilot to production with evidence.
 
@@ -22,9 +22,9 @@ pilot to production with evidence.
 
 ## Brand Direction
 
-The ChatoraAi brand uses a clean navy, blue, cyan, and white system. The logo is
-stored at `assets/chatoraai-logo.svg` and avoids generic AI visual tropes such
-as heavy purple gradients or decorative blobs.
+The RelayClarity brand uses a clean graphite, white, blue, teal, and slate
+system. The logo is stored at `assets/relayclarity-logo.svg` and avoids generic
+AI visual tropes such as heavy purple gradients or decorative blobs.
 
 ## Run
 

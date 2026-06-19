@@ -1,26 +1,26 @@
-# ChatoraAi Implementation Plan
+# RelayClarity Implementation Plan
 
 ## Objective
 
-Rebrand the project as **ChatoraAi**, a real B2B software product for deploying
+Rebrand the project as **RelayClarity**, a real B2B software product for deploying
 production voice AI agents. The experience should show the software workflow
 clearly and avoid looking like a generic AI landing page.
 
 ## Brand Direction
 
-ChatoraAi should feel credible, operational, and enterprise-ready.
+RelayClarity should feel credible, operational, and enterprise-ready.
 
-- Brand name: `ChatoraAi`
+- Brand name: `RelayClarity`
 - Product category: voice agent deployment platform
-- Palette: navy, white, slate, blue, cyan, green, amber, and red
+- Palette: graphite, white, slate, blue, teal, green, amber, and red
 - Avoid: heavy purple gradients, decorative AI blobs, vague AI imagery, and
   overdesigned futuristic effects
-- Logo: `assets/chatoraai-logo.svg`
-- Logo concept: conversation mark, voice signal, and clean wordmark
+- Logo: `assets/relayclarity-logo.svg`
+- Logo concept: routing mark, voice signal, and clean wordmark
 
 ## Product Workflow
 
-The site is organized around the ChatoraAi workflow:
+The site is organized around the RelayClarity workflow:
 
 1. **Customer workspace setup**
    Capture the customer, use case, launch goals, channels, and guardrails.

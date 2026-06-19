@@ -1,12 +1,33 @@
 import 'dotenv/config';
 
+const configuredAllowedOrigins = (process.env.ALLOWED_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const defaultAllowedOrigins = [
+  'https://relayclarity.com',
+  'https://www.relayclarity.com',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+  'http://127.0.0.1:5174',
+  'http://localhost:5174',
+];
+
+const derivedAllowedOrigins = [
+  process.env.PUBLIC_BASE_URL,
+  process.env.APP_BASE_URL,
+  process.env.API_BASE_URL,
+].filter((origin): origin is string => Boolean(origin));
+
 export const config = {
   port: Number(process.env.PORT || 8787),
-  allowedOrigin: process.env.ALLOWED_ORIGIN || 'http://127.0.0.1:5173',
-  allowedOrigins: (process.env.ALLOWED_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  allowedOrigin: configuredAllowedOrigins[0] || 'http://127.0.0.1:5173',
+  allowedOrigins: Array.from(new Set([
+    ...configuredAllowedOrigins,
+    ...derivedAllowedOrigins,
+    ...defaultAllowedOrigins,
+  ])),
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   openaiModel: process.env.OPENAI_MODEL || 'gpt-5-nano',
   realtimeModel: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime',
@@ -26,6 +47,11 @@ export const config = {
   publicBaseUrl: process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || process.env.API_BASE_URL || '',
   appBaseUrl: process.env.APP_BASE_URL || 'http://127.0.0.1:5173',
   apiBaseUrl: process.env.API_BASE_URL || 'http://127.0.0.1:8787',
+  authDbPath: process.env.AUTH_DB_PATH || 'server/data/auth.sqlite',
+  authCookieName: process.env.AUTH_COOKIE_NAME || 'relayclarity_session',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://127.0.0.1:8787/api/auth/google/callback',
   hubspotClientId: process.env.HUBSPOT_CLIENT_ID || '',
   hubspotClientSecret: process.env.HUBSPOT_CLIENT_SECRET || '',
   hubspotRedirectUri: process.env.HUBSPOT_REDIRECT_URI || 'http://127.0.0.1:8787/api/integrations/oauth/hubspot/callback',

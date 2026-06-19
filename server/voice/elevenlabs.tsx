@@ -4,6 +4,10 @@ type SynthesizeSpeechInput = {
   text: string;
   voiceId?: string;
   modelId?: string;
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+  speed?: number;
   mock?: boolean;
 };
 
@@ -11,6 +15,10 @@ export async function synthesizeSpeech({
   text,
   voiceId = config.elevenLabsVoiceId,
   modelId = config.elevenLabsModel,
+  stability = 0.55,
+  similarityBoost = 0.75,
+  style = 0.1,
+  speed = 1,
   mock = false,
 }: SynthesizeSpeechInput) {
   if (!text) throw new Error('text is required');
@@ -38,9 +46,10 @@ export async function synthesizeSpeech({
       model_id: modelId,
       output_format: 'mp3_44100_128',
       voice_settings: {
-        stability: 0.55,
-        similarity_boost: 0.75,
-        style: 0.1,
+        stability,
+        similarity_boost: similarityBoost,
+        style,
+        speed,
         use_speaker_boost: true,
       },
     }),

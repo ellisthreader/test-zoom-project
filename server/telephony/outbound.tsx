@@ -107,7 +107,7 @@ function buildDemoScript(input: DemoCallInput) {
 
   return [
     greeting,
-    'This is a quick test of your ChatoraAI phone agent.',
+    'This is a quick test of your RelayClarity phone agent.',
     `For example, if a caller said, ${callerNeed}, I would respond using your approved business information.`,
     approvedAnswer,
     `If I could not resolve it safely, I would ${handoff}.${reference ? ` Reference: ${reference}.` : ''}`,

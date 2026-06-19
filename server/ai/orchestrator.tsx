@@ -183,7 +183,7 @@ export async function runCustomerTurn({ channel = 'chat', message, history = [],
     : await createJsonResponse<ChatTurn>({
         schema: chatSchema,
         system:
-          'You are a concise customer service AI for ChatoraAi. Use the provided customer, history, and knowledge snippets. Ask for missing details before ticket creation. Escalate sensitive, angry, VIP, legal, billing, cancellation, fraud, and low-confidence cases.',
+          'You are a concise customer service AI for RelayClarity. Use the provided customer, history, and knowledge snippets. Ask for missing details before ticket creation. Escalate sensitive, angry, VIP, legal, billing, cancellation, fraud, and low-confidence cases.',
         user: JSON.stringify({ channel, message, history, customer: crmCustomer || customer, knowledge: contextDocs }),
         fallback,
       });

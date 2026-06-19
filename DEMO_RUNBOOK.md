@@ -1,13 +1,13 @@
-# ChatoraAi Demo Runbook
+# RelayClarity Demo Runbook
 
-Use this runbook to present ChatoraAi as software, not as a portfolio page.
-The story is: ChatoraAi helps teams deploy production voice agents with
+Use this runbook to present RelayClarity as software, not as a portfolio page.
+The story is: RelayClarity helps teams deploy production voice agents with
 workspace setup, integrations, voice tuning, evaluations, deployment insights,
 and handoff reporting.
 
 ## Opening Line
 
-"This is ChatoraAi, a voice agent deployment platform for taking customer AI
+"This is RelayClarity, a voice agent deployment platform for taking customer AI
 agents from pilot to production with evidence. The product is organized around
 the actual deployment workflow: configure the workspace, connect systems, tune
 voice behavior, run evaluations, capture deployment insights, and generate the
@@ -16,7 +16,7 @@ handoff report."
 ## 90-Second Product Walkthrough
 
 1. **Hero**
-   Say: "ChatoraAi gives the deployment team a single operating view for
+   Say: "RelayClarity gives the deployment team a single operating view for
    readiness, containment, resolution, and launch state."
 
 2. **Workspace Setup**
@@ -41,14 +41,14 @@ handoff report."
 
 6. **Insights And Handoff**
    Show deployment insights, then generate the report.
-   Say: "ChatoraAi packages what happened in the pilot into a handoff artifact
+   Say: "RelayClarity packages what happened in the pilot into a handoff artifact
    for services, partners, support leaders, or engineering."
 
 ## Five-Minute Walkthrough
 
 ### 0:00-0:40 - Product Positioning
 
-- Point to the ChatoraAi logo and hero.
+- Point to the RelayClarity logo and hero.
 - Say this is a product showcase for deployment teams.
 - Avoid framing it as a generic demo or landing page.
 
@@ -56,7 +56,7 @@ handoff report."
 
 - Explain the Northstar Health Support workspace.
 - Show the goal, channels, and guardrails.
-- Emphasize that ChatoraAi turns discovery into a launch-ready workspace.
+- Emphasize that RelayClarity turns discovery into a launch-ready workspace.
 
 ### 1:20-2:00 - Integrations
 
@@ -84,7 +84,7 @@ handoff report."
 ### 4:10-4:40 - Deployment Insights
 
 - Explain the identity signal gap.
-- Say ChatoraAi turns field gaps into reusable deployment intelligence.
+- Say RelayClarity turns field gaps into reusable deployment intelligence.
 
 ### 4:40-5:00 - Handoff
 
@@ -93,7 +93,7 @@ handoff report."
 
 ## Product Claims To Keep Clear
 
-- ChatoraAi is presented as a product concept/prototype.
+- RelayClarity is presented as a product concept/prototype.
 - Current tool calls and metrics are simulated unless the backend provider keys
   are configured.
 - The homepage demo can request a real outbound test call only when the backend
@@ -105,6 +105,6 @@ handoff report."
 
 ## Strong Close
 
-"ChatoraAi is designed around the gap between impressive AI demos and real
+"RelayClarity is designed around the gap between impressive AI demos and real
 customer deployments. It gives teams the structure to prove a voice agent is
 ready before it reaches daily customer use."

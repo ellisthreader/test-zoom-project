@@ -16,5 +16,5 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "server/**/*.ts", "remotion", "vite.config.ts"]
+  "include": ["src", "server/**/*.tsx", "remotion", "vite.config.ts", "vite.config.tsx"]
 }

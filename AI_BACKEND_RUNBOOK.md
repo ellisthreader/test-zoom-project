@@ -1,6 +1,6 @@
-# ChatoraAi AI Backend Runbook
+# RelayClarity AI Backend Runbook
 
-This backend is the working foundation for the AI systems behind ChatoraAi. It
+This backend is the working foundation for the AI systems behind RelayClarity. It
 does not depend on the dashboard or front-end.
 
 ## What It Does

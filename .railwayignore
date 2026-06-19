@@ -1,8 +1,11 @@
 node_modules/
 dist/
+.git/
 .env
-.DS_Store
+screenshots/
+*.log
 npm-debug.log*
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+public/chatoraai-launch-video.mp4
