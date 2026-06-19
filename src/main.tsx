@@ -5168,7 +5168,11 @@ function CompletedOnboardingDashboard({
             value={assistantInput}
             onChange={(event) => setAssistantInput(event.target.value)}
           />
-          <button type="submit" aria-label="Send">↑</button>
+          <button type="submit" aria-label="Send">
+            <svg aria-hidden="true" viewBox="0 0 20 20" focusable="false">
+              <path d="M10 15.5V5.4M5.6 9.8 10 5.4l4.4 4.4" />
+            </svg>
+          </button>
 	        </form>
 	      </section>
 	      <AnimatePresence>
