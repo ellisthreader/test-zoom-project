@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AnimatePresence, animate, motion, useInView, useMotionValueEvent, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useMotionValueEvent, useScroll, useTransform, type Variants } from "framer-motion";
 import relayclarityLogoUrl from "../assets/relayclarity-logo.svg";
 import demoAgentAvatarUrl from "../assets/demo-agent-avatar.png";
 import workflowConfigureCardUrl from "../assets/workflow-configure-card.png";
@@ -334,32 +334,54 @@ const workflow = [
   }
 ];
 
-const marketStats = [
-  {
-    value: 85,
-    suffix: "%",
-    label: "of service leaders are exploring conversational AI.",
-    source: "Gartner",
-    href: "https://www.gartner.com/en/newsroom/press-releases/2024-12-09-gartner-survey-reveals-85-percent-of-customer-service-leaders-will-explore-or-pilot-customer-facing-conversational-genai-in-2025"
-  },
-  {
-    value: 14,
-    prefix: "+",
-    suffix: "%",
-    label: "more issues resolved per hour by support teams.",
-    source: "NBER",
-    href: "https://www.nber.org/papers/w31161"
-  },
-  {
-    value: 47.82,
-    prefix: "$",
-    suffix: "B",
-    decimals: 2,
-    label: "AI customer-service market forecast by 2030.",
-    source: "MarketsandMarkets",
-    href: "https://www.marketsandmarkets.com/PressReleases/ai-for-customer-service.asp"
+const workflowGridVariants: Variants = {
+  hidden: {},
+  show: {
+    transition: {
+      delayChildren: 0.18,
+      staggerChildren: 0.24
+    }
   }
-];
+};
+
+const workflowCardVariants: Variants = {
+  hidden: {
+    opacity: 0,
+    y: 74,
+    scale: 0.94,
+    rotateX: 7,
+    filter: "blur(18px)"
+  },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    rotateX: 0,
+    filter: "blur(0px)",
+    transition: {
+      duration: 0.95,
+      ease: [0.16, 1, 0.3, 1]
+    }
+  }
+};
+
+const workflowGlowVariants: Variants = {
+  hidden: {
+    opacity: 0,
+    x: "-135%",
+    skewX: -18
+  },
+  show: {
+    opacity: [0, 0.72, 0],
+    x: "135%",
+    skewX: -18,
+    transition: {
+      duration: 1.15,
+      ease: [0.22, 1, 0.36, 1],
+      delay: 0.28
+    }
+  }
+};
 
 const footerColumns = [
   {
@@ -521,6 +543,41 @@ const scenarios: Record<ScenarioKey, Scenario> = {
 };
 
 const simpleIcon = (slug: string) => `https://cdn.simpleicons.org/${slug}`;
+const faviconLogo = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+
+const providerLogoDomains: Record<string, string> = {
+  auth0: "auth0.com",
+  cliniko: "cliniko.com",
+  confluence: "atlassian.com",
+  "confluence policy hub": "atlassian.com",
+  fixflo: "fixflo.com",
+  front: "front.com",
+  gorgias: "gorgias.com",
+  hubspot: "hubspot.com",
+  intercom: "intercom.com",
+  "intercom articles": "intercom.com",
+  linear: "linear.app",
+  notion: "notion.so",
+  onfido: "onfido.com",
+  pabau: "pabau.com",
+  reapit: "reapit.com",
+  salesforce: "salesforce.com",
+  "salesforce financial services cloud": "salesforce.com",
+  servicenow: "servicenow.com",
+  sevenrooms: "sevenrooms.com",
+  shopify: "shopify.com",
+  "shopify customers": "shopify.com",
+  "shopify payments": "shopify.com",
+  square: "squareup.com",
+  stripe: "stripe.com",
+  "stripe api": "stripe.com",
+  xero: "xero.com",
+  zendesk: "zendesk.com",
+  "zendesk support": "zendesk.com",
+  zoom: "zoom.us",
+  "zoom contact center": "zoom.us",
+  "zoom phone": "zoom.us"
+};
 
 const providerLogoFallbacks: Record<string, string> = {
   hubspot: simpleIcon("hubspot"),
@@ -1216,12 +1273,20 @@ function tailorConnectors(playbook: BusinessPlaybook, current: Connector[] = ini
 function providerMetadata(provider: string, key: string, catalog: IntegrationProvider[] = []) {
   const catalogMatch = findCatalogProvider(provider, key, catalog);
   const normalized = normalizeProviderName(provider);
-  const fallbackKey = Object.keys(providerLogoFallbacks).find((item) => normalized.includes(normalizeProviderName(item)));
+  const domainKey = Object.keys(providerLogoDomains).find((item) => {
+    const normalizedDomainKey = normalizeProviderName(item);
+    return normalized.includes(normalizedDomainKey) || normalizedDomainKey.includes(normalized);
+  });
+  const fallbackKey = Object.keys(providerLogoFallbacks).find((item) => {
+    const normalizedFallback = normalizeProviderName(item);
+    return normalized.includes(normalizedFallback) || normalizedFallback.includes(normalized);
+  });
   const fallbackLogo = providerLogoFallbacks[normalized] || providerLogoFallbacks[fallbackKey || ""];
+  const domainLogo = domainKey ? faviconLogo(providerLogoDomains[domainKey]) : "";
 
   return {
     providerId: catalogMatch?.id || providerIdFromName(provider, key),
-    logoUrl: catalogMatch?.logoUrl || fallbackLogo || "",
+    logoUrl: fallbackLogo || domainLogo || catalogMatch?.logoUrl || "",
     scopes: catalogMatch?.scopes || []
   };
 }
@@ -1233,10 +1298,12 @@ function connectedStateForConnector(connector: Connector, connected: Integration
     return {};
   }
 
+  const metadata = providerMetadata(connection.name, connector.key);
+
   return {
     providerId: connection.providerId,
     provider: connection.name,
-    logoUrl: connection.logoUrl,
+    logoUrl: metadata.logoUrl || connection.logoUrl,
     connected: true,
     connectionMode: connection.mode,
     connectionMessage: connection.message,
@@ -1257,9 +1324,22 @@ function findCatalogProvider(provider: string, key: string, catalog: Integration
 function providerIdFromName(provider: string, key: string) {
   const normalized = normalizeProviderName(provider);
 
+  if (normalized.includes("auth0")) return "auth0";
+  if (normalized.includes("cliniko")) return "cliniko";
+  if (normalized.includes("confluence")) return "confluence";
+  if (normalized.includes("fixflo")) return "fixflo";
+  if (normalized.includes("front")) return "front";
+  if (normalized.includes("gorgias")) return "gorgias";
   if (normalized.includes("hubspot")) return "hubspot";
+  if (normalized.includes("intercom")) return "intercom";
+  if (normalized.includes("linear")) return "linear";
   if (normalized.includes("salesforce")) return "salesforce";
   if (normalized.includes("notion")) return "notion";
+  if (normalized.includes("onfido")) return "onfido";
+  if (normalized.includes("pabau")) return "pabau";
+  if (normalized.includes("reapit")) return "reapit";
+  if (normalized.includes("servicenow")) return "servicenow";
+  if (normalized.includes("sevenrooms")) return "sevenrooms";
   if (normalized.includes("zoom")) return "zoom";
   if (normalized.includes("zendesk")) return "zendesk";
   if (normalized.includes("stripe")) return "stripe";
@@ -1271,6 +1351,8 @@ function providerIdFromName(provider: string, key: string) {
   if (normalized.includes("googleanalytics")) return "google-analytics";
   if (normalized.includes("snowflake")) return "snowflake";
   if (normalized.includes("gmail")) return "gmail";
+  if (normalized.includes("square")) return "square";
+  if (normalized.includes("xero")) return "xero";
 
   return key;
 }
@@ -1298,6 +1380,8 @@ function firstAvailable(current: string, options: string[]): string {
 function App() {
   const platformRef = useRef<HTMLElement>(null);
   const customerStoriesRef = useRef<HTMLElement>(null);
+  const customerStoriesViewportRef = useRef<HTMLDivElement | null>(null);
+  const customerStoriesRailRef = useRef<HTMLDivElement | null>(null);
   const demoChatThreadRef = useRef<HTMLDivElement | null>(null);
   const marketingVideoRef = useRef<HTMLVideoElement | null>(null);
   const [view, setView] = useState<"home" | "auth" | "setup" | "dashboard">(() => {
@@ -1341,6 +1425,7 @@ function App() {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [activeLaunchStep, setActiveLaunchStep] = useState(0);
   const [activeCustomerStoryIndex, setActiveCustomerStoryIndex] = useState(0);
+  const [customerStoriesTravel, setCustomerStoriesTravel] = useState(0);
   const [projects, setProjects] = useState<Project[]>([
     { id: "northstar-dental", name: "Northstar Dental", meta: "Live customer agent", businessType: "Dental clinic" },
     { id: "cleardbs", name: "ClearDBS", meta: "DBS support pilot", businessType: "Compliance checks" },
@@ -1357,9 +1442,32 @@ function App() {
   const heroScale = useTransform(scrollY, [0, 820], [1.06, 1.16]);
   const heroOpacity = useTransform(scrollY, [0, 720], [1, 0.6]);
   const heroGridY = useTransform(scrollY, [0, 820], [0, -64]);
-  const customerStoriesX = useTransform(customerStoriesProgress, [0, 1], ["0%", "-72%"]);
+  const customerStoriesX = useTransform(customerStoriesProgress, [0, 0.16, 1], [0, 0, -customerStoriesTravel]);
   const selectedScenario = scenarios[scenarioKey];
   const demoPlaybook = useMemo(() => getBusinessPlaybook(demoBusinessType), [demoBusinessType]);
+
+  useEffect(() => {
+    const viewport = customerStoriesViewportRef.current;
+    const rail = customerStoriesRailRef.current;
+
+    if (!viewport || !rail) return;
+
+    const updateTravel = () => {
+      setCustomerStoriesTravel(Math.max(0, Math.ceil(rail.scrollWidth - viewport.clientWidth)));
+    };
+
+    updateTravel();
+
+    const resizeObserver = new ResizeObserver(updateTravel);
+    resizeObserver.observe(viewport);
+    resizeObserver.observe(rail);
+    window.addEventListener("resize", updateTravel);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateTravel);
+    };
+  }, []);
 
   useMotionValueEvent(customerStoriesProgress, "change", (latest) => {
     const nextIndex = Math.min(testimonials.length - 1, Math.max(0, Math.round(latest * (testimonials.length - 1))));
@@ -1745,7 +1853,6 @@ function App() {
         <nav className="marketing-links" aria-label="Primary navigation">
           <a href="#home">Home</a>
           <a href="#platform">Platform</a>
-          <a href="#proof">Proof</a>
           <a href="#demo">Demo</a>
           <a href="#handoff">Launch</a>
           <a href="#testimonials">Reviews</a>
@@ -1777,12 +1884,6 @@ function App() {
           </div>
         </section>
 
-        <section className="stats-strip" id="proof" aria-label="Customer service AI statistics">
-          {marketStats.map((stat, index) => (
-            <AnimatedStatCard stat={stat} index={index} key={stat.source} />
-          ))}
-        </section>
-
         <section className="section platform-section" id="platform" ref={platformRef}>
           <div className="platform-sticky">
             <Reveal className="section-heading platform-heading">
@@ -1794,11 +1895,18 @@ function App() {
             </Reveal>
 
             <div className="workflow-viewport">
-              <motion.div className="workflow-grid">
+              <motion.div
+                className="workflow-grid"
+                variants={workflowGridVariants}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.34, margin: "-10% 0px -12% 0px" }}
+              >
                 {workflow.slice(0, 3).map((step) => (
-                  <Reveal className="workflow-card" key={step.title}>
+                  <motion.article className="workflow-card" variants={workflowCardVariants} key={step.title}>
                     <div className="workflow-image">
                       <img src={step.image} alt="" loading="lazy" />
+                      <motion.span className="workflow-image-glow" variants={workflowGlowVariants} aria-hidden="true" />
                       <a className="workflow-arrow" href="#demo" aria-label={`${step.phase}: open demo`}>
                         <span aria-hidden="true" />
                       </a>
@@ -1808,7 +1916,7 @@ function App() {
                       <p>{step.example}</p>
                       <small>{step.outcome}</small>
                     </div>
-                  </Reveal>
+                  </motion.article>
                 ))}
               </motion.div>
             </div>
@@ -2167,8 +2275,8 @@ function App() {
               <h2>What customers are saying about RelayClarity</h2>
             </Reveal>
 
-            <div className="customer-stories-viewport">
-              <motion.div className="customer-stories-rail" style={{ x: customerStoriesX }} aria-label="Customer stories">
+            <div className="customer-stories-viewport" ref={customerStoriesViewportRef}>
+              <motion.div className="customer-stories-rail" ref={customerStoriesRailRef} style={{ x: customerStoriesX }} aria-label="Customer stories">
                 {testimonials.map((testimonial, index) => (
                   <motion.article
                     className={`customer-story-card ${testimonial.logo ? "has-logo" : ""} ${index === activeCustomerStoryIndex ? "is-active" : ""}`}
@@ -2196,8 +2304,8 @@ function App() {
                         <p>&ldquo;{testimonial.quote}&rdquo;</p>
                         <cite>- {testimonial.name}, {testimonial.role}</cite>
                       </div>
-                      <span className="customer-story-action" aria-hidden="true">↗</span>
                     </div>
+                    <span className="customer-story-action" aria-hidden="true">↗</span>
                   </motion.article>
                 ))}
               </motion.div>
@@ -2474,19 +2582,33 @@ function Dashboard({
   const [customApps, setCustomApps] = useState<{ id: string; name: string; detail: string }[]>([]);
   const [customActions, setCustomActions] = useState<{ id: string; name: string; detail: string }[]>([]);
   const [selectedWorkflowAgentId, setSelectedWorkflowAgentId] = useState("agentIntake");
+  const [hiddenWorkflowAgentIds, setHiddenWorkflowAgentIds] = useState<string[]>([]);
+  const [workflowNodeEdits, setWorkflowNodeEdits] = useState<Record<string, { title?: string; detail?: string }>>({});
+  const [workflowNodeOffsets, setWorkflowNodeOffsets] = useState<Record<string, { x: number; y: number }>>({});
+  const [activeWorkflowNodeDrag, setActiveWorkflowNodeDrag] = useState<{
+    nodeId: string;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    moved: boolean;
+  } | null>(null);
   const [workflowDrag, setWorkflowDrag] = useState<{ id: string; width: number } | null>(null);
   const workflowCanvasRef = useRef<HTMLDivElement | null>(null);
   const [launchChannel, setLaunchChannel] = useState(playbook.channels[0]);
   const [selectedVoiceId, setSelectedVoiceId] = useState(elevenLabsVoices[0].id);
+  const [confirmedVoiceId, setConfirmedVoiceId] = useState("");
   const [voiceSpeed, setVoiceSpeed] = useState(1);
   const [voiceStability, setVoiceStability] = useState(58);
   const [voiceStyle, setVoiceStyle] = useState(16);
-  const [previewText, setPreviewText] = useState(elevenLabsVoices[0].sample);
+  const [previewText, setPreviewText] = useState("Hello, I am your virtual agent. I can help answer questions and get you to the right person.");
   const [voicePreviewStatus, setVoicePreviewStatus] = useState("Ready to preview with ElevenLabs.");
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
   const [voicePreviewCompleted, setVoicePreviewCompleted] = useState(false);
   const [activeAudioUrl, setActiveAudioUrl] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const voicePreviewRequestRef = useRef(0);
+  const autoVoicePreviewRef = useRef("");
   const [connectorCategory, setConnectorCategory] = useState<ConnectorGroup>("core");
   const [activeConnectorKey, setActiveConnectorKey] = useState("crm");
   const [report, setReport] = useState("Prepare the launch pack when setup, connectors, voice tuning, and evaluation evidence are ready.");
@@ -2623,11 +2745,12 @@ function Dashboard({
   const systemsComplete = connectedCount > 0;
   const agentsComplete = true;
   const testsComplete = testRunState === "complete" && completedRunCount >= playbook.tests.length;
+  const voiceConfirmed = confirmedVoiceId === selectedVoiceId;
   const stepCompletion = [
     hasBusinessType && selectedZoomCapabilityCount > 0,
     systemsComplete,
     agentsComplete,
-    true,
+    voiceConfirmed,
     testsComplete,
     hasLaunchRequestDetails
   ];
@@ -2639,7 +2762,7 @@ function Dashboard({
     "Confirm the business type and select at least one Zoom AI capability.",
     `Connect at least one system (${connectedCount} connected).`,
     "Review the generated agent workflow.",
-    "Review the voice settings.",
+    "Choose and confirm a voice for callers.",
     "Run the launch tests before continuing.",
     "Enter the website URL and phone contact number."
   ][step];
@@ -2681,6 +2804,9 @@ function Dashboard({
     setCompletedRunCount(0);
     setSelectedWorkflowAgentId("agentIntake");
     setReviewedAgentIds(["agentIntake"]);
+    setHiddenWorkflowAgentIds([]);
+    setWorkflowNodeEdits({});
+    setWorkflowNodeOffsets({});
   }, [playbook]);
 
   const clearTestRunTimers = () => {
@@ -2689,12 +2815,6 @@ function Dashboard({
   };
 
   useEffect(() => clearTestRunTimers, []);
-
-  useEffect(() => {
-    setPreviewText(selectedVoice.sample);
-    setVoicePreviewStatus(`Ready to preview ${selectedVoice.name} with ElevenLabs.`);
-    setVoicePreviewCompleted(false);
-  }, [selectedVoice]);
 
   useEffect(() => {
     setVoicePreviewCompleted(false);
@@ -3068,8 +3188,9 @@ function Dashboard({
   const helpdeskSystem = playbook.connectorProviders.helpdesk || "Helpdesk";
   const testProgress = testRunState === "complete" ? 100 : Math.round((completedRunCount / Math.max(1, playbook.tests.length)) * 100);
   const agentDisplayName = agentName.trim() || `${playbook.label} assistant`;
+  const connectedWorkflowConnectors = connectors.filter((connector) => connector.connected);
   const workflowIntegrations = connectors
-    .filter((connector) => ["crm", "knowledge", "helpdesk", "telephony"].includes(connector.key))
+    .filter((connector) => connector.connected && ["crm", "knowledge", "helpdesk", "telephony"].includes(connector.key))
     .slice(0, 4);
   const selectedWorkflowSuggestions = selectedCapabilities.slice(0, 5);
   const workflowAgents = [
@@ -3079,7 +3200,7 @@ function Dashboard({
       name: agentDisplayName,
       trigger: "New customer request",
       job: agentPurpose.trim() || playbook.missions[0],
-      tools: [crmSystem, "Zoom voice"],
+      connectorKeys: ["crm", "telephony"],
       outcome: "Captures the request and confirms the next step."
     },
     {
@@ -3088,7 +3209,7 @@ function Dashboard({
       name: "Answer agent",
       trigger: "Routine question",
       job: `Checks ${primaryKnowledgeSource} and customer context.`,
-      tools: [primaryKnowledgeSource, crmSystem],
+      connectorKeys: ["knowledge", "crm"],
       outcome: "Answers from approved information."
     },
     {
@@ -3097,7 +3218,7 @@ function Dashboard({
       name: "Escalation agent",
       trigger: "Sensitive or urgent case",
       job: agentHandoff.trim() || "Summarises urgent or sensitive requests for the team.",
-      tools: [helpdeskSystem, "Team alert"],
+      connectorKeys: ["helpdesk", "messaging", "crm"],
       outcome: "Routes the case with summary and context."
     }
   ];
@@ -3109,11 +3230,54 @@ function Dashboard({
       name: agent.name,
       trigger: "New workflow",
       job: agent.job,
-      tools: [crmSystem, helpdeskSystem],
+      connectorKeys: ["crm", "helpdesk", "knowledge"],
       outcome: "Runs the configured workflow path."
     }))
+  ].filter((agent) => !hiddenWorkflowAgentIds.includes(agent.id));
+  const activeWorkspaceAgent = workspaceAgents.find((agent) => agent.id === selectedWorkflowAgentId) || workspaceAgents[0] || workflowAgents[0];
+  const voiceIntroLine = `Hello, I am your virtual agent for ${confirmedWorkspaceName}. I can help answer questions and get you to the right person.`;
+  const voicePreviewLines = [
+    {
+      label: "Greeting",
+      text: voiceIntroLine
+    },
+    {
+      label: "Booking",
+      text: `Thanks for calling ${confirmedWorkspaceName}. I can check availability, answer quick questions, or get the right person involved.`
+    },
+    {
+      label: "Handoff",
+      text: "I have the main details. I will summarize this for the team so the next person has the context."
+    }
   ];
-  const activeWorkspaceAgent = workspaceAgents.find((agent) => agent.id === selectedWorkflowAgentId) || workspaceAgents[0];
+  const activeWorkspaceConnectors = activeWorkspaceAgent.connectorKeys
+    .map((key) => connectedWorkflowConnectors.find((connector) => connector.key === key))
+    .filter((connector): connector is Connector => Boolean(connector));
+  const activeWorkspaceConnectorNames = activeWorkspaceConnectors.map((connector) => connector.provider).join(", ");
+  const activeWorkspaceOutcomeDetail = activeWorkspaceConnectorNames
+    ? `Uses ${activeWorkspaceConnectorNames}.`
+    : "Connect the required systems before launch.";
+  const workflowNodeKey = (nodeId: string) => `${activeWorkspaceAgent.id}:${nodeId}`;
+  const workflowNodeContent = {
+    trigger: {
+      title: workflowNodeEdits[workflowNodeKey("trigger")]?.title || activeWorkspaceAgent.trigger,
+      detail: workflowNodeEdits[workflowNodeKey("trigger")]?.detail || `${confirmedBusinessType || playbook.label} request enters this agent.`
+    },
+    instructions: {
+      title: workflowNodeEdits[workflowNodeKey("instructions")]?.title || activeWorkspaceAgent.name,
+      detail: workflowNodeEdits[workflowNodeKey("instructions")]?.detail || activeWorkspaceAgent.job
+    },
+    outcome: {
+      title: workflowNodeEdits[workflowNodeKey("outcome")]?.title || activeWorkspaceAgent.outcome,
+      detail: workflowNodeEdits[workflowNodeKey("outcome")]?.detail || activeWorkspaceOutcomeDetail
+    }
+  };
+
+  useEffect(() => {
+    if (!workspaceAgents.some((agent) => agent.id === selectedWorkflowAgentId)) {
+      setSelectedWorkflowAgentId(workspaceAgents[0]?.id || "agentIntake");
+    }
+  }, [selectedWorkflowAgentId, workspaceAgents]);
 
   const gridSize = 24;
   const workflowPositionStyle = (id: string): React.CSSProperties => ({
@@ -3184,6 +3348,107 @@ function Dashboard({
     setWorkflowDrag(null);
   };
 
+  const editWorkflowNode = (nodeId: "trigger" | "instructions" | "outcome") => {
+    if (activeWorkflowNodeDrag?.moved) {
+      return;
+    }
+
+    const current = workflowNodeContent[nodeId];
+    const nextTitle = window.prompt("Edit title", current.title);
+
+    if (nextTitle === null) {
+      return;
+    }
+
+    const nextDetail = window.prompt("Edit detail", current.detail);
+
+    if (nextDetail === null) {
+      return;
+    }
+
+    setWorkflowNodeEdits((currentEdits) => ({
+      ...currentEdits,
+      [workflowNodeKey(nodeId)]: {
+        title: nextTitle.trim() || current.title,
+        detail: nextDetail.trim() || current.detail
+      }
+    }));
+  };
+
+  const startWorkspaceNodeDrag = (nodeId: string, event: React.PointerEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest("button")) {
+      return;
+    }
+
+    const currentOffset = workflowNodeOffsets[workflowNodeKey(nodeId)] || { x: 0, y: 0 };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setActiveWorkflowNodeDrag({
+      nodeId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: currentOffset.x,
+      originY: currentOffset.y,
+      moved: false
+    });
+  };
+
+  const moveWorkspaceNodeDrag = (event: React.PointerEvent<HTMLElement>) => {
+    if (!activeWorkflowNodeDrag || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+      return;
+    }
+
+    const deltaX = event.clientX - activeWorkflowNodeDrag.startX;
+    const deltaY = event.clientY - activeWorkflowNodeDrag.startY;
+    const moved = activeWorkflowNodeDrag.moved || Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
+    const x = Math.max(-34, Math.min(34, activeWorkflowNodeDrag.originX + deltaX));
+    const y = Math.max(-28, Math.min(28, activeWorkflowNodeDrag.originY + deltaY));
+
+    setWorkflowNodeOffsets((current) => ({
+      ...current,
+      [workflowNodeKey(activeWorkflowNodeDrag.nodeId)]: { x, y }
+    }));
+    setActiveWorkflowNodeDrag((current) => current ? { ...current, moved } : current);
+  };
+
+  const stopWorkspaceNodeDrag = (event: React.PointerEvent<HTMLElement>, nodeId: "trigger" | "instructions" | "outcome") => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    const wasMoved = activeWorkflowNodeDrag?.moved;
+    setActiveWorkflowNodeDrag(null);
+
+    if (!wasMoved) {
+      editWorkflowNode(nodeId);
+    }
+  };
+
+  const workflowNodeOffsetStyle = (nodeId: string): React.CSSProperties => {
+    const offset = workflowNodeOffsets[workflowNodeKey(nodeId)] || { x: 0, y: 0 };
+    return {
+      transform: `translate(${offset.x}px, ${offset.y}px)`
+    };
+  };
+
+  const deleteWorkflowAgent = (agentId: string) => {
+    const remainingAgents = workspaceAgents.filter((agent) => agent.id !== agentId);
+
+    if (!remainingAgents.length) {
+      return;
+    }
+
+    setCustomAgents((current) => current.filter((agent) => agent.id !== agentId));
+    setHiddenWorkflowAgentIds((current) => (
+      customAgents.some((agent) => agent.id === agentId) || current.includes(agentId)
+        ? current
+        : [...current, agentId]
+    ));
+
+    if (selectedWorkflowAgentId === agentId) {
+      setSelectedWorkflowAgentId(remainingAgents[0].id);
+    }
+  };
+
   const addWorkflowAgent = () => {
     const index = customAgents.length + 4;
     const id = `agent-${Date.now()}`;
@@ -3199,14 +3464,20 @@ function Dashboard({
   };
 
   const addWorkflowApp = () => {
-    const nextConnector = connectors[(customApps.length + workflowIntegrations.length) % connectors.length];
+    const availableConnectors = connectedWorkflowConnectors.length ? connectedWorkflowConnectors : workflowIntegrations;
+    const nextConnector = availableConnectors[(customApps.length + workflowIntegrations.length) % Math.max(1, availableConnectors.length)];
+
+    if (!nextConnector) {
+      return;
+    }
+
     const id = `app-${Date.now()}`;
     const x = 456 + (customApps.length % 3) * 192;
     const y = 456 + Math.floor(customApps.length / 3) * 108;
     setCustomApps((current) => [...current, {
       id,
-      name: nextConnector?.provider || "New app",
-      detail: nextConnector?.name || "Connect an app"
+      name: nextConnector.provider,
+      detail: nextConnector.name
     }]);
     setWorkflowLayout((current) => ({ ...current, [id]: { x, y } }));
   };
@@ -3220,21 +3491,23 @@ function Dashboard({
     setWorkflowLayout((current) => ({ ...current, [id]: { x, y } }));
   };
 
-  const playBrowserVoiceFallback = () => {
+  const playBrowserVoiceFallback = (text = previewText, voice = selectedVoice) => {
     if (!("speechSynthesis" in window)) {
       return false;
     }
 
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(previewText);
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = voiceSpeed;
-    utterance.pitch = selectedVoice.id === "adam" ? 0.92 : 1;
+    utterance.pitch = voice.id === "adam" ? 0.92 : 1;
     window.speechSynthesis.speak(utterance);
     return true;
   };
 
-  const previewVoice = async () => {
-    const text = previewText.trim();
+  const generateVoicePreview = async (voice = selectedVoice, textToRead = previewText) => {
+    const text = textToRead.trim();
+    const requestId = voicePreviewRequestRef.current + 1;
+    voicePreviewRequestRef.current = requestId;
 
     if (!text) {
       setVoicePreviewStatus("Add a short line for the voice to read.");
@@ -3242,7 +3515,8 @@ function Dashboard({
     }
 
     setIsPreviewingVoice(true);
-    setVoicePreviewStatus(`Generating ${selectedVoice.name} in ElevenLabs...`);
+    setVoicePreviewCompleted(false);
+    setVoicePreviewStatus(`Generating ${voice.name} preview...`);
 
     try {
       const payload = await fetchJsonFromApi<SpeechPayload>("/api/voice/speech", {
@@ -3250,7 +3524,7 @@ function Dashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text,
-          voiceId: selectedVoice.voiceId,
+          voiceId: voice.voiceId,
           modelId: "eleven_multilingual_v2",
           speed: voiceSpeed,
           stability: voiceStability / 100,
@@ -3259,39 +3533,84 @@ function Dashboard({
         })
       });
 
+      if (requestId !== voicePreviewRequestRef.current) {
+        return;
+      }
+
       if (payload.mode === "audio" && payload.audioBase64) {
         const binary = window.atob(payload.audioBase64);
         const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
         const audioUrl = URL.createObjectURL(new Blob([bytes], { type: payload.contentType || "audio/mpeg" }));
 
-        if (activeAudioUrl) {
-          URL.revokeObjectURL(activeAudioUrl);
-        }
+        setActiveAudioUrl((currentUrl) => {
+          if (currentUrl) {
+            URL.revokeObjectURL(currentUrl);
+          }
 
-        setActiveAudioUrl(audioUrl);
+          return audioUrl;
+        });
         setVoicePreviewCompleted(true);
-        setVoicePreviewStatus(`${selectedVoice.name} preview is playing.`);
+        setVoicePreviewStatus(`${voice.name} preview is playing.`);
         window.setTimeout(() => {
           audioRef.current?.play().catch(() => setVoicePreviewStatus("Preview generated. Press play in the audio control."));
         }, 0);
         return;
       }
 
-      const fallbackPlayed = playBrowserVoiceFallback();
-      setVoicePreviewCompleted(fallbackPlayed);
-      setVoicePreviewStatus(fallbackPlayed
-        ? "ElevenLabs API key is not set. Playing browser preview instead."
-        : payload.message || "ElevenLabs API key is not set.");
+      setVoicePreviewCompleted(false);
+      setVoicePreviewStatus(payload.message || "ElevenLabs preview is unavailable. Add an API key to hear this voice.");
     } catch (error) {
-      const fallbackPlayed = playBrowserVoiceFallback();
-      setVoicePreviewCompleted(fallbackPlayed);
-      setVoicePreviewStatus(fallbackPlayed
-        ? "Voice API is offline. Playing browser preview instead."
-        : error instanceof Error ? error.message : "Voice preview failed.");
+      if (requestId !== voicePreviewRequestRef.current) {
+        return;
+      }
+
+      setVoicePreviewCompleted(false);
+      setVoicePreviewStatus(error instanceof Error ? error.message : "ElevenLabs preview failed.");
     } finally {
-      setIsPreviewingVoice(false);
+      if (requestId === voicePreviewRequestRef.current) {
+        setIsPreviewingVoice(false);
+      }
     }
   };
+
+  const selectVoice = (voice: VoicePreset) => {
+    setSelectedVoiceId(voice.id);
+    setConfirmedVoiceId("");
+    setPreviewText(voiceIntroLine);
+    autoVoicePreviewRef.current = `${voice.id}:${voiceIntroLine}`;
+    generateVoicePreview(voice, voiceIntroLine);
+  };
+
+  const confirmVoice = () => {
+    if (!voicePreviewCompleted) {
+      setVoicePreviewStatus("Listen to the ElevenLabs preview before confirming this voice.");
+      return;
+    }
+
+    setConfirmedVoiceId(selectedVoice.id);
+    setVoicePreviewStatus(`${selectedVoice.name} is confirmed.`);
+    setStep(4);
+  };
+
+  const previewVoice = () => {
+    generateVoicePreview(selectedVoice, previewText);
+  };
+
+  useEffect(() => {
+    if (step !== 3 || voiceConfirmed) {
+      return;
+    }
+
+    const signature = `${selectedVoice.id}:${voiceIntroLine}`;
+
+    if (autoVoicePreviewRef.current === signature) {
+      return;
+    }
+
+    autoVoicePreviewRef.current = signature;
+    setPreviewText(voiceIntroLine);
+    generateVoicePreview(selectedVoice, voiceIntroLine);
+  }, [step, voiceConfirmed, selectedVoice, voiceIntroLine]);
 
   return (
     <main className="onboarding-shell">
@@ -3626,22 +3945,35 @@ function Dashboard({
                               </div>
                               <div className="workflow-agent-nav">
                                 {workspaceAgents.map((agent) => (
-                                  <button
+                                  <div
                                     className={[
+                                      "workflow-agent-item",
                                       activeWorkspaceAgent.id === agent.id ? "is-active" : "",
                                       reviewedAgentIds.includes(agent.id) ? "is-reviewed" : ""
                                     ].filter(Boolean).join(" ")}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedWorkflowAgentId(agent.id);
-                                      setReviewedAgentIds((current) => current.includes(agent.id) ? current : [...current, agent.id]);
-                                    }}
                                     key={agent.id}
                                   >
-                                    <span>{agent.label}</span>
-                                    <strong>{agent.name}</strong>
-                                    <small>{agent.trigger}</small>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedWorkflowAgentId(agent.id);
+                                        setReviewedAgentIds((current) => current.includes(agent.id) ? current : [...current, agent.id]);
+                                      }}
+                                    >
+                                      <span>{agent.label}</span>
+                                      <strong>{agent.name}</strong>
+                                      <small>{agent.trigger}</small>
+                                    </button>
+                                    <button
+                                      className="workflow-agent-delete"
+                                      type="button"
+                                      aria-label={`Delete ${agent.name}`}
+                                      onClick={() => deleteWorkflowAgent(agent.id)}
+                                      disabled={workspaceAgents.length <= 1}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
                                 ))}
                               </div>
                             </aside>
@@ -3652,38 +3984,76 @@ function Dashboard({
                                   <strong>{activeWorkspaceAgent.name}</strong>
                                 </div>
                                 <div className="workflow-toolbar" aria-label="Workspace tools">
-                                  <button type="button" onClick={addWorkflowAgent}>+ Agent</button>
                                   <button type="button" onClick={addWorkflowApp}>+ App</button>
-                                  <button type="button" onClick={addWorkflowAction}>+ Action</button>
-                                  <button type="button">Edit prompt</button>
                                 </div>
                               </div>
                               <div className="workflow-workspace-board">
-                                <article className="workflow-node workflow-trigger">
+                                <article
+                                  className="workflow-node workflow-trigger"
+                                  style={workflowNodeOffsetStyle("trigger")}
+                                  onPointerDown={(event) => startWorkspaceNodeDrag("trigger", event)}
+                                  onPointerMove={moveWorkspaceNodeDrag}
+                                  onPointerUp={(event) => stopWorkspaceNodeDrag(event, "trigger")}
+                                  tabIndex={0}
+                                >
                                   <b>Trigger</b>
-                                  <strong>{activeWorkspaceAgent.trigger}</strong>
-                                  <p>{confirmedBusinessType || playbook.label} request enters this agent.</p>
+                                  <strong>{workflowNodeContent.trigger.title}</strong>
+                                  <p>{workflowNodeContent.trigger.detail}</p>
                                 </article>
                                 <i aria-hidden="true" />
-                                <article className="workflow-node workflow-agent">
+                                <article
+                                  className="workflow-node workflow-agent"
+                                  style={workflowNodeOffsetStyle("instructions")}
+                                  onPointerDown={(event) => startWorkspaceNodeDrag("instructions", event)}
+                                  onPointerMove={moveWorkspaceNodeDrag}
+                                  onPointerUp={(event) => stopWorkspaceNodeDrag(event, "instructions")}
+                                  tabIndex={0}
+                                >
                                   <b>Instructions</b>
-                                  <strong>{activeWorkspaceAgent.name}</strong>
-                                  <p>{activeWorkspaceAgent.job}</p>
+                                  <strong>{workflowNodeContent.instructions.title}</strong>
+                                  <p>{workflowNodeContent.instructions.detail}</p>
                                 </article>
                                 <i aria-hidden="true" />
-                                <div className="workflow-tool-panel" aria-label={`${activeWorkspaceAgent.label} tools`}>
-                                  <b>Tools</b>
+                                <div
+                                  className="workflow-tool-panel"
+                                  aria-label={`${activeWorkspaceAgent.label} connected systems`}
+                                  style={workflowNodeOffsetStyle("systems")}
+                                  onPointerDown={(event) => startWorkspaceNodeDrag("systems", event)}
+                                  onPointerMove={moveWorkspaceNodeDrag}
+                                  onPointerUp={(event) => {
+                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                      event.currentTarget.releasePointerCapture(event.pointerId);
+                                    }
+                                    setActiveWorkflowNodeDrag(null);
+                                  }}
+                                >
+                                  <b>Connected systems</b>
                                   <div>
-                                    {activeWorkspaceAgent.tools.map((tool) => (
-                                      <span key={tool}>{tool}</span>
+                                    {activeWorkspaceConnectors.map((connector) => (
+                                      <span className="workflow-system-chip" key={connector.key}>
+                                        <ProviderLogo connector={connector} />
+                                        <em>{connector.provider}</em>
+                                      </span>
                                     ))}
+                                    {!activeWorkspaceConnectors.length ? (
+                                      <span className="workflow-system-chip is-empty">
+                                        <em>Connect systems first</em>
+                                      </span>
+                                    ) : null}
                                   </div>
                                 </div>
                                 <i aria-hidden="true" />
-                                <article className="workflow-node workflow-action-a">
+                                <article
+                                  className="workflow-node workflow-action-a"
+                                  style={workflowNodeOffsetStyle("outcome")}
+                                  onPointerDown={(event) => startWorkspaceNodeDrag("outcome", event)}
+                                  onPointerMove={moveWorkspaceNodeDrag}
+                                  onPointerUp={(event) => stopWorkspaceNodeDrag(event, "outcome")}
+                                  tabIndex={0}
+                                >
                                   <b>Outcome</b>
-                                  <strong>{activeWorkspaceAgent.outcome}</strong>
-                                  <p>{activeWorkspaceAgent.label === "Handoff agent" ? `Uses ${helpdeskSystem} for escalation.` : `Keeps ${crmSystem} updated.`}</p>
+                                  <strong>{workflowNodeContent.outcome.title}</strong>
+                                  <p>{workflowNodeContent.outcome.detail}</p>
                                 </article>
                               </div>
                             </section>
@@ -3723,119 +4093,70 @@ function Dashboard({
                       >
                         <div className="voice-lab-top">
                           <div>
-                            <span>Voice lab</span>
-                            <strong>ElevenLabs preview</strong>
+                            <span>Step 4</span>
+                            <strong>Pick your agent voice.</strong>
                           </div>
-                          <b>{selectedVoice.role}</b>
+                          <b>{isPreviewingVoice ? "Generating preview" : voicePreviewCompleted ? "ElevenLabs preview ready" : "Choose a voice"}</b>
                         </div>
 
                         <div className="voice-lab-grid">
-                          <aside className="voice-rail" aria-label="ElevenLabs voices">
+                          <aside className="voice-rail" aria-label="Choose an ElevenLabs voice">
                             {elevenLabsVoices.map((voice, index) => (
                               <motion.button
-                                className={voice.id === selectedVoice.id ? "is-active" : ""}
+                                className={[
+                                  voice.id === selectedVoice.id ? "is-active" : "",
+                                  confirmedVoiceId === voice.id ? "is-confirmed" : ""
+                                ].filter(Boolean).join(" ")}
                                 type="button"
-                                onClick={() => setSelectedVoiceId(voice.id)}
-                                initial={{ opacity: 0, x: -14 }}
-                                animate={{ opacity: 1, x: 0 }}
+                                onClick={() => selectVoice(voice)}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.28, delay: index * 0.04 }}
                                 key={voice.id}
                               >
                                 <span>{voice.name.slice(0, 1)}</span>
                                 <div>
                                   <strong>{voice.name}</strong>
-                                  <small>{voice.tone}</small>
+                                  <small>{voice.role} - {voice.tone}</small>
                                 </div>
                               </motion.button>
                             ))}
                           </aside>
 
-                          <section className="voice-console" aria-label={`${selectedVoice.name} preview`}>
+                          <section className="voice-console" aria-label={`${selectedVoice.name} ElevenLabs preview`}>
                             <div className="voice-console-head">
                               <div>
-                                <span>Selected voice</span>
+                                <span>ElevenLabs preview</span>
                                 <h3>{selectedVoice.name}</h3>
+                                <p>{previewText}</p>
                               </div>
                               <button className="voice-preview-button" type="button" onClick={previewVoice} disabled={isPreviewingVoice}>
-                                {isPreviewingVoice ? "Generating" : "Preview voice"}
+                                {isPreviewingVoice ? "Generating" : "Replay"}
                               </button>
                             </div>
 
                             <div className={`voice-signal ${isPreviewingVoice ? "is-loading" : ""}`} aria-hidden="true">
-                              <div className="voice-wave">
-                                <i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i />
+                              <span></span>
+                              <div>
+                                <strong>{isPreviewingVoice ? "Creating real voice sample" : voicePreviewCompleted ? "Real ElevenLabs sample loaded" : "Waiting for ElevenLabs audio"}</strong>
+                                <small>{voicePreviewStatus}</small>
                               </div>
                             </div>
 
-                            <label className="voice-script">
-                              <span>Preview line</span>
-                              <textarea
-                                value={previewText}
-                                onChange={(event) => setPreviewText(event.target.value)}
-                                rows={3}
-                              />
-                            </label>
-
                             <div className="voice-playback">
-                              <span>{voicePreviewStatus}</span>
                               {activeAudioUrl ? <audio ref={audioRef} src={activeAudioUrl} controls /> : <audio ref={audioRef} controls />}
                             </div>
-                          </section>
 
-                          <aside className="voice-settings" aria-label="Voice tuning">
-                            <label>
-                              <span>Speed</span>
-                              <strong>{voiceSpeed.toFixed(2)}x</strong>
-                              <input
-                                type="range"
-                                min="0.7"
-                                max="1.2"
-                                value={voiceSpeed}
-                                step="0.01"
-                                onChange={(event) => setVoiceSpeed(Number(event.target.value))}
-                              />
-                            </label>
-                            <label>
-                              <span>Stability</span>
-                              <strong>{voiceStability}%</strong>
-                              <input
-                                type="range"
-                                min="30"
-                                max="85"
-                                value={voiceStability}
-                                step="1"
-                                onChange={(event) => setVoiceStability(Number(event.target.value))}
-                              />
-                            </label>
-                            <label>
-                              <span>Expression</span>
-                              <strong>{voiceStyle}%</strong>
-                              <input
-                                type="range"
-                                min="0"
-                                max="45"
-                                value={voiceStyle}
-                                step="1"
-                                onChange={(event) => setVoiceStyle(Number(event.target.value))}
-                              />
-                            </label>
-                            <label>
-                              <span>Response</span>
-                              <strong>{latency}ms</strong>
-                              <input
-                                type="range"
-                                min="450"
-                                max="1200"
-                                value={latency}
-                                step="10"
-                                onChange={(event) => setLatency(Number(event.target.value))}
-                              />
-                            </label>
-                            <label className="voice-switch">
-                              <input type="checkbox" checked={bargeIn} onChange={(event) => setBargeIn(event.target.checked)} />
-                              <span>Natural interruption</span>
-                            </label>
-                          </aside>
+                            <div className="voice-confirm-panel">
+                              <div>
+                                <span>{voicePreviewCompleted ? "Ready to confirm" : "Listen first"}</span>
+                                <strong>{voicePreviewCompleted ? `Use ${selectedVoice.name} for this agent.` : "Choose a voice and wait for the ElevenLabs sample."}</strong>
+                              </div>
+                              <button type="button" onClick={confirmVoice} disabled={isPreviewingVoice || !voicePreviewCompleted}>
+                                {voicePreviewCompleted ? "Confirm voice" : "Generating voice"}
+                              </button>
+                            </div>
+                          </section>
                         </div>
                       </motion.section>
                     </div>
@@ -4155,6 +4476,7 @@ function CompletedOnboardingDashboard({
   const [showAgentInsights, setShowAgentInsights] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState<ChatMessage[]>([]);
   const [isRouteMenuOpen, setIsRouteMenuOpen] = useState(false);
+  const [activeMetricsTab, setActiveMetricsTab] = useState("overview");
   const workspaceInitial = user.name?.slice(0, 1).toUpperCase() || user.email.slice(0, 1).toUpperCase();
   const routes = [
     { id: "ai", title: "AI workspace", meta: "Ask anything" },
@@ -4185,6 +4507,16 @@ function CompletedOnboardingDashboard({
     { label: "10:00", value: 8 },
     { label: "11:00", value: 6 },
     { label: "12:00", value: 10 }
+  ];
+  const metricsHourlyVolume = [
+    { label: "07:00", value: 6 },
+    { label: "08:00", value: 14 },
+    { label: "09:00", value: 30 },
+    { label: "10:00", value: 24 },
+    { label: "11:00", value: 17 },
+    { label: "12:00", value: 22 },
+    { label: "13:00", value: 15 },
+    { label: "14:00", value: 10 }
   ];
   const handoffReasons = [
     { label: "Billing exception", value: 2, percent: 67 },
@@ -4476,33 +4808,48 @@ function CompletedOnboardingDashboard({
     metrics: { label: string; value: string; detail: string }[];
     primaryTitle: string;
     primaryMeta: string;
-    chart?: { label: string; value: number }[];
+    chart?: { label: string; value: number; display?: string }[];
     bars?: { label: string; value: number; percent: number }[];
     timeline?: { time: string; title: string; detail: string; tag: string }[];
     items?: { label: string; value: string; note: string }[];
     next: string[];
   };
+  type MetricsTab = {
+    id: string;
+    label: string;
+    title: string;
+    summary: string;
+    status: string;
+    metrics: { label: string; value: string; detail: string }[];
+    primaryTitle: string;
+    primaryMeta: string;
+    chart: { label: string; value: number; display?: string; empty?: boolean }[];
+    chartTotal: string;
+    items: { label: string; value: string; note: string }[];
+    checks?: { label: string; value: string; note: string }[];
+    next: string[];
+  };
   const dashboardPages: Record<string, CompletedDashboardPage> = {
     metrics: {
-      eyebrow: "Performance today",
-      title: "Customer agent health is steady.",
-      summary: "Containment, speed, and review volume are all inside the launch target for the current workspace.",
-      status: "On target",
+      eyebrow: "Production readiness",
+      title: "Customer agent is ready to operate.",
+      summary: "RelayClarity is tracking the outcome, safety, voice, knowledge, and integration signals that decide whether this agent can run in production.",
+      status: "Ready",
       metrics: [
-        { label: "Resolved by AI", value: "82%", detail: "+4 pts this week" },
-        { label: "Calls handled", value: "42", detail: "12 live now" },
-        { label: "Median response", value: "640ms", detail: "Voice start" },
-        { label: "CSAT signal", value: "4.7", detail: "From 18 rated calls" }
+        { label: "Readiness score", value: "92%", detail: "All critical gates passing" },
+        { label: "True containment", value: "82%", detail: "No reopen or recontact" },
+        { label: "p95 turn latency", value: "1.4s", detail: "Voice response end to end" },
+        { label: "Open risks", value: "3", detail: "2 billing, 1 policy" }
       ],
-      primaryTitle: "Volume by hour",
-      primaryMeta: "Peak demand is still concentrated before midday.",
-      chart: agentHourlyVolume.map((hour) => ({ ...hour, value: Math.max(42, hour.value * 14) })),
+      primaryTitle: "Call demand by hour",
+      primaryMeta: "Today with launch-readiness checks attached.",
+      chart: metricsHourlyVolume.map((hour) => ({ ...hour, value: hour.value * 5, display: String(hour.value) })),
       items: [
-        { label: "Containment target", value: "80%", note: "Current result is above launch threshold." },
+        { label: "Safety gate", value: "0", note: "No policy violations in today's reviewed calls." },
         { label: "Handoff rate", value: "7%", note: "Three conversations need owner review." },
         { label: "Knowledge confidence", value: "91%", note: "Two draft answers are ready to approve." }
       ],
-      next: ["Review the three handoffs", "Approve knowledge updates", "Export launch report"]
+      next: ["Review open risks", "Approve knowledge updates", "Export launch report"]
     },
     calls: {
       eyebrow: "Customer conversations",
@@ -4603,6 +4950,237 @@ function CompletedOnboardingDashboard({
       next: ["Run connection test", "Finish analytics export", "Review OAuth scopes"]
     }
   };
+  const metricsTabs: MetricsTab[] = [
+    {
+      id: "overview",
+      label: "Overview",
+      title: "Production metrics",
+      summary: "The key signals that decide whether this agent can safely run today.",
+      status: "Ready",
+      metrics: dashboardPages.metrics.metrics,
+      primaryTitle: dashboardPages.metrics.primaryTitle,
+      primaryMeta: dashboardPages.metrics.primaryMeta,
+      chart: dashboardPages.metrics.chart || [],
+      chartTotal: "138 calls",
+      items: dashboardPages.metrics.items || [],
+      checks: dashboardPages.metrics.items || [],
+      next: dashboardPages.metrics.next
+    },
+    {
+      id: "outcomes",
+      label: "Outcomes",
+      title: "Customer outcomes",
+      summary: "Business value, resolution quality, and whether containment is real.",
+      status: "Strong",
+      metrics: [
+        { label: "First-contact resolution", value: "74%", detail: "+6 pts this week" },
+        { label: "Recontact within 24h", value: "4%", detail: "Below 8% target" },
+        { label: "Human time saved", value: "8.6h", detail: "Estimated today" },
+        { label: "CSAT signal", value: "4.7", detail: "From 18 rated calls" }
+      ],
+      primaryTitle: "Outcome mix",
+      primaryMeta: "Resolved, handed off, and review-needed conversations.",
+      chart: [
+        { label: "AI solved", value: 164, display: "82%" },
+        { label: "Human", value: 42, display: "7%" },
+        { label: "Review", value: 66, display: "3" },
+        { label: "Recontact", value: 28, display: "4%" },
+        { label: "CSAT", value: 94, display: "4.7" }
+      ],
+      chartTotal: "82% true containment",
+      items: [
+        { label: "Resolved by AI", value: "82%", note: "Contained without reopen or later customer recontact." },
+        { label: "Human handoff", value: "7%", note: "Mostly billing exceptions with prepared context." },
+        { label: "Review needed", value: "3", note: "Two billing cases and one sensitive-policy case." }
+      ],
+      checks: [
+        { label: "False containment", value: "Low", note: "No clear case where AI closed a request incorrectly." },
+        { label: "Highest-value intent", value: "Billing", note: "Invoice requests are the strongest automation path." },
+        { label: "Customer friction", value: "4%", note: "Low recontact rate suggests the answer held." }
+      ],
+      next: ["Review false containment", "Open top intents", "Export outcome summary"]
+    },
+    {
+      id: "voice",
+      label: "Voice",
+      title: "Voice quality",
+      summary: "Latency, speech recognition, interruption handling, and failed turns.",
+      status: "Healthy",
+      metrics: [
+        { label: "p95 turn latency", value: "1.4s", detail: "End to end" },
+        { label: "ASR confidence", value: "94%", detail: "Clear audio" },
+        { label: "Barge-in recovery", value: "88%", detail: "Interruptions handled" },
+        { label: "Silence timeout", value: "2%", detail: "Inside threshold" }
+      ],
+      primaryTitle: "Voice signals",
+      primaryMeta: "Where the voice experience can still fail a live caller.",
+      chart: [
+        { label: "p95", value: 112, display: "1.4s" },
+        { label: "ASR", value: 188, display: "94%" },
+        { label: "Barge-in", value: 176, display: "88%" },
+        { label: "Timeout", value: 24, display: "2%" },
+        { label: "Failed", value: 44, display: "4" }
+      ],
+      chartTotal: "Healthy voice",
+      items: [
+        { label: "Slowest turn", value: "2.8s", note: "Billing lookup with CRM context attached." },
+        { label: "Failed turns", value: "4", note: "Mostly caller silence or unclear speech." },
+        { label: "Avg duration", value: "3m 12s", note: "Down 18 seconds from the prior run." }
+      ],
+      checks: [
+        { label: "Latency risk", value: "Low", note: "p95 remains inside the launch threshold." },
+        { label: "Interruption risk", value: "Med", note: "Barge-in works, but angry-caller tests need another pass." },
+        { label: "Audio risk", value: "Low", note: "ASR confidence is stable across the sample." }
+      ],
+      next: ["Listen to slow turns", "Tune endpointing", "Retest interruption flow"]
+    },
+    {
+      id: "knowledge",
+      label: "Knowledge",
+      title: "Knowledge quality",
+      summary: "Coverage, citations, stale sources, and answer gaps blocking trust.",
+      status: "91% confident",
+      metrics: [
+        { label: "Citation coverage", value: "89%", detail: "Approved sources used" },
+        { label: "Retrieval misses", value: "6", detail: "Mostly billing limits" },
+        { label: "Stale sources", value: "1", detail: "Pricing policy" },
+        { label: "Draft answers", value: "2", detail: "Ready to approve" }
+      ],
+      primaryTitle: "Knowledge gaps",
+      primaryMeta: "The smallest set of updates likely to improve trust.",
+      chart: [
+        { label: "Citations", value: 178, display: "89%" },
+        { label: "Coverage", value: 182, display: "91%" },
+        { label: "Misses", value: 58, display: "6" },
+        { label: "Stale", value: 24, display: "1" },
+        { label: "Drafts", value: 42, display: "2" }
+      ],
+      chartTotal: "91% confident",
+      items: [
+        { label: "Billing exception limits", value: "High", note: "Add what the agent can promise before finance review." },
+        { label: "Holiday opening hours", value: "Med", note: "Confirm the latest customer-facing schedule." },
+        { label: "Refund status wording", value: "Low", note: "Tighten answer for pending bank transfers." }
+      ],
+      checks: [
+        { label: "Launch blocker", value: "None", note: "Current gaps can be handled with review routing." },
+        { label: "Most useful fix", value: "Billing", note: "One policy source would improve several intents." },
+        { label: "Approval queue", value: "2", note: "Draft answers are ready for owner review." }
+      ],
+      next: ["Approve draft answers", "Upload policy source", "Retest top intents"]
+    },
+    {
+      id: "safety",
+      label: "Safety",
+      title: "Safety and guardrails",
+      summary: "Policy, unsupported actions, sensitive escalations, and low-confidence answers.",
+      status: "Passing",
+      metrics: [
+        { label: "Policy violations", value: "0", detail: "Reviewed sample clean" },
+        { label: "Unsupported attempts", value: "2", detail: "Blocked correctly" },
+        { label: "Low-confidence answers", value: "5", detail: "Queued for review" },
+        { label: "Sensitive escalations", value: "1", detail: "Handled correctly" }
+      ],
+      primaryTitle: "Safety queue",
+      primaryMeta: "Issues that must stay explainable before launch.",
+      chart: [
+        { label: "Policy", value: 20, display: "0" },
+        { label: "Blocked", value: 48, display: "2" },
+        { label: "Low conf", value: 82, display: "5" },
+        { label: "Sensitive", value: 36, display: "1" },
+        { label: "Guardrails", value: 184, display: "Pass" }
+      ],
+      chartTotal: "Passing",
+      items: [
+        { label: "Refund authorization", value: "Blocked", note: "Agent asked for review instead of promising a refund." },
+        { label: "Sensitive policy", value: "Review", note: "One answer needs wording approval." },
+        { label: "Prompt injection", value: "Passed", note: "Test case did not override policy instructions." }
+      ],
+      checks: [
+        { label: "Launch gate", value: "Pass", note: "No critical safety failures in reviewed calls." },
+        { label: "Needs approval", value: "1", note: "Sensitive policy wording should be checked." },
+        { label: "Guardrail drift", value: "None", note: "Rules are still matching the configured workflow." }
+      ],
+      next: ["Review flagged call", "Approve policy wording", "Run adversarial test"]
+    },
+    {
+      id: "handoffs",
+      label: "Handoffs",
+      title: "Human handoffs",
+      summary: "Escalation reasons, SLA risk, owner routing, and context quality.",
+      status: "3 pending",
+      metrics: [
+        { label: "Handoff rate", value: "7%", detail: "Three reviews" },
+        { label: "SLA risk", value: "1", detail: "Due in 22 min" },
+        { label: "Avg handoff", value: "41s", detail: "Context prepared" },
+        { label: "Owner accuracy", value: "96%", detail: "Correct queue" }
+      ],
+      primaryTitle: "Handoff reasons",
+      primaryMeta: "Why the agent chose a human path.",
+      chart: [
+        { label: "Billing", value: 132, display: "2" },
+        { label: "Policy", value: 72, display: "1" },
+        { label: "SLA", value: 58, display: "1" },
+        { label: "Owner", value: 192, display: "96%" },
+        { label: "Context", value: 164, display: "Good" }
+      ],
+      chartTotal: "3 pending",
+      items: [
+        { label: "Billing exception", value: "2", note: "Needs finance owner approval." },
+        { label: "Sensitive policy", value: "1", note: "Check wording before customer reply." },
+        { label: "Knowledge gap", value: "0", note: "No unresolved answer gaps in queue." }
+      ],
+      checks: [
+        { label: "SLA risk", value: "1", note: "One billing case is due in 22 minutes." },
+        { label: "Context quality", value: "Good", note: "Summaries include caller need and owner hint." },
+        { label: "Routing issue", value: "None", note: "No handoff reached the wrong queue." }
+      ],
+      next: ["Assign billing owner", "Approve policy response", "Close stale reviews"]
+    },
+    {
+      id: "systems",
+      label: "Systems",
+      title: "System health",
+      summary: "Integration reliability, sync freshness, tool success, and webhook health.",
+      status: "Connected",
+      metrics: [
+        { label: "CRM lookup success", value: "98%", detail: "HubSpot passing" },
+        { label: "Ticket write success", value: "100%", detail: "Zendesk passing" },
+        { label: "Webhook errors", value: "0", detail: "Zoom ingest healthy" },
+        { label: "Knowledge sync", value: "9m", detail: "Last refreshed" }
+      ],
+      primaryTitle: "System checks",
+      primaryMeta: "The production dependencies the agent needs to trust.",
+      chart: [
+        { label: "CRM", value: 196, display: "98%" },
+        { label: "Tickets", value: 200, display: "100%" },
+        { label: "Zoom", value: 20, display: "0" },
+        { label: "Sync", value: 84, display: "9m" },
+        { label: "Export", value: 52, display: "Setup" }
+      ],
+      chartTotal: "4 connected",
+      items: [
+        { label: "Zoom Contact Center", value: "Live", note: "Webhook signature and transcript ingest passing." },
+        { label: "HubSpot", value: "4m", note: "Contact lookup and notes write tested." },
+        { label: "Analytics export", value: "Setup", note: "Destination still needs schema mapping." }
+      ],
+      checks: [
+        { label: "Production dependency", value: "Analytics", note: "Export setup is the only unfinished integration path." },
+        { label: "Auth health", value: "Good", note: "Connected systems are passing current checks." },
+        { label: "Tool retries", value: "0", note: "No retry loops in today's sample." }
+      ],
+      next: ["Run connection test", "Finish analytics export", "Review OAuth scopes"]
+    }
+  ];
+  const activeMetricsTabData = metricsTabs.find((tab) => tab.id === activeMetricsTab) || metricsTabs[0];
+  const activeMetricsChart = [
+    ...activeMetricsTabData.chart,
+    ...Array.from({ length: Math.max(0, 8 - activeMetricsTabData.chart.length) }, (_, index) => ({
+      label: `empty-${index}`,
+      value: 0,
+      display: "",
+      empty: true
+    }))
+  ].slice(0, 8);
   type DashboardPage = (typeof dashboardPages)[keyof typeof dashboardPages];
   type DashboardChartBar = { label: string; value: number };
   type DashboardProgressBar = { label: string; value: number; percent: number };
@@ -4782,71 +5360,187 @@ function CompletedOnboardingDashboard({
               </header>
 
               {activeRoute === "metrics" ? (
-                <section className="completed-metrics-studio" aria-label="Metrics overview">
-                  <div className="completed-metrics-kpi-rail" aria-label={`${activeRouteData.title} metrics`}>
-                    {activeDashboardPage.metrics.map((metric, index) => (
-                      <article className={index === 0 ? "is-primary" : ""} key={metric.label}>
-                        <span>{metric.label}</span>
-                        <strong>{metric.value}</strong>
+		                <section className="completed-metrics-studio" aria-label="Metrics overview">
+		                  <div className="completed-metrics-title-row">
+		                    <div>
+		                      <h2>Production metrics</h2>
+		                      <p>Review the key operating signals for the selected area without changing the dashboard shape.</p>
+		                    </div>
+		                    <strong><span aria-hidden="true"></span>{activeMetricsTabData.status}</strong>
+		                  </div>
+
+                    <div className="completed-metrics-tabs" role="tablist" aria-label="Metrics sections">
+                      {metricsTabs.map((tab) => (
+                        <button
+                          className={tab.id === activeMetricsTabData.id ? "is-active" : ""}
+                          type="button"
+                          role="tab"
+                          aria-selected={tab.id === activeMetricsTabData.id}
+                          onClick={() => setActiveMetricsTab(tab.id)}
+                          key={tab.id}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+	                  <div className="completed-metrics-kpi-rail" aria-label={`${activeRouteData.title} metrics`}>
+	                    {activeMetricsTabData.metrics.map((metric, index) => (
+	                      <article className={index === 0 ? "is-primary" : ""} key={metric.label}>
+	                        <div className="completed-kpi-icon" aria-hidden="true">
+	                          {index === 0 ? "✓" : index === 1 ? "⌕" : index === 2 ? "ϟ" : index === 3 ? "☆" : "•"}
+	                        </div>
+	                        <span>{metric.label}</span>
+	                        <strong>{metric.value}</strong>
                         <small>{metric.detail}</small>
                       </article>
                     ))}
                   </div>
 
                   <div className="completed-metrics-layout">
-                    <section className="completed-metrics-trend" aria-labelledby="completed-metrics-trend-title">
-                      <div className="completed-metrics-panel-heading">
-                        <div>
-                          <span>{activeDashboardPage.primaryMeta}</span>
-                          <h2 id="completed-metrics-trend-title">{activeDashboardPage.primaryTitle}</h2>
-                        </div>
-                        <strong>42 total</strong>
-                      </div>
+	                    <section className="completed-metrics-trend" aria-labelledby="completed-metrics-trend-title">
+	                      <div className="completed-metrics-panel-heading">
+	                        <div>
+	                          <span>{activeMetricsTabData.primaryMeta}</span>
+	                          <h2 id="completed-metrics-trend-title">{activeMetricsTabData.primaryTitle}</h2>
+	                        </div>
+	                        <strong>{activeMetricsTabData.chartTotal}</strong>
+	                      </div>
 
-                      {hasChart(activeDashboardPage) ? (
-                        <div className="completed-metrics-chart" aria-label={activeDashboardPage.primaryTitle}>
-                          {activeDashboardPage.chart.map((bar) => (
-                            <div key={bar.label}>
-                              <i style={{ height: `${bar.value}px` }}></i>
-                              <span>{bar.label}</span>
+                        <div className={`completed-metrics-visual is-${activeMetricsTabData.id}`} aria-label={activeMetricsTabData.primaryTitle}>
+                          {activeMetricsTabData.id === "overview" ? (
+                            <div className="completed-metrics-chart">
+                              <div className="completed-metrics-chart-scale" aria-hidden="true">
+                                <span>High</span>
+                                <span>Med</span>
+                                <span>Low</span>
+                                <span>0</span>
+                              </div>
+                              {activeMetricsChart.map((bar, index) => (
+                                <div className={`completed-metrics-chart-bar ${bar.empty ? "is-empty" : ""}`} key={`${bar.label}-${index}`}>
+                                  <i style={{ height: `${bar.value}px` }}></i>
+                                  <b>{bar.display || Math.round(bar.value / 5)}</b>
+                                  <span>{bar.label}</span>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          ) : activeMetricsTabData.id === "outcomes" ? (
+                            <div className="completed-outcome-visual">
+                              <div className="completed-outcome-stack" aria-hidden="true">
+                                {activeMetricsTabData.chart.slice(0, 4).map((bar) => (
+                                  <i key={bar.label} style={{ width: `${Math.max(10, Math.min(58, bar.value / 3))}%` }}></i>
+                                ))}
+                              </div>
+                              <div className="completed-outcome-grid">
+                                {activeMetricsTabData.chart.map((bar) => (
+                                  <article key={bar.label}>
+                                    <strong>{bar.display}</strong>
+                                    <span>{bar.label}</span>
+                                  </article>
+                                ))}
+                              </div>
+                            </div>
+                          ) : activeMetricsTabData.id === "voice" ? (
+                            <div className="completed-voice-visual">
+                              <div className="completed-voice-line" aria-hidden="true">
+                                {activeMetricsTabData.chart.map((bar) => (
+                                  <i key={bar.label} style={{ height: `${Math.max(18, Math.min(96, bar.value / 2))}px` }}></i>
+                                ))}
+                              </div>
+                              <div className="completed-voice-grid">
+                                {activeMetricsTabData.chart.map((bar) => (
+                                  <article key={bar.label}>
+                                    <span>{bar.label}</span>
+                                    <strong>{bar.display}</strong>
+                                  </article>
+                                ))}
+                              </div>
+                            </div>
+                          ) : activeMetricsTabData.id === "knowledge" ? (
+                            <div className="completed-knowledge-visual">
+                              {activeMetricsTabData.items.map((item) => (
+                                <article key={item.label}>
+                                  <span>{item.value}</span>
+                                  <div>
+                                    <strong>{item.label}</strong>
+                                    <p>{item.note}</p>
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          ) : activeMetricsTabData.id === "safety" ? (
+                            <div className="completed-safety-visual">
+                              {activeMetricsTabData.metrics.map((metric) => (
+                                <article key={metric.label}>
+                                  <span>{metric.label}</span>
+                                  <strong>{metric.value}</strong>
+                                  <small>{metric.detail}</small>
+                                </article>
+                              ))}
+                            </div>
+                          ) : activeMetricsTabData.id === "handoffs" ? (
+                            <div className="completed-handoff-visual">
+                              {activeMetricsTabData.chart.map((bar) => (
+                                <article key={bar.label}>
+                                  <div>
+                                    <span>{bar.label}</span>
+                                    <strong>{bar.display}</strong>
+                                  </div>
+                                  <i><b style={{ width: `${Math.max(8, Math.min(100, bar.value / 2))}%` }}></b></i>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="completed-system-visual">
+                              {activeMetricsTabData.items.map((item) => (
+                                <article key={item.label}>
+                                  <span>{item.label}</span>
+                                  <strong>{item.value}</strong>
+                                  <small>{item.note}</small>
+                                </article>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ) : null}
-                    </section>
-
-                    <aside className="completed-metrics-summary" aria-label="Health summary">
-                      <div className="completed-metrics-panel-heading">
-                        <div>
-                          <span>Operating checks</span>
-                          <h2>Launch health</h2>
+                        <div className="completed-demand-note">
+                          <span aria-hidden="true">✦</span>
+                          {activeMetricsTabData.items[0]?.label}: {activeMetricsTabData.items[0]?.note}
                         </div>
-                      </div>
+	                    </section>
 
-                      {activeDashboardPage.items ? (
+	                    <aside className="completed-metrics-summary" aria-label="Health summary">
+		                      <div className="completed-metrics-panel-heading">
+		                        <div>
+		                          <span>Operating checks</span>
+		                          <h2>Key signals</h2>
+		                        </div>
+		                        <strong>{activeMetricsTabData.status}</strong>
+	                      </div>
+
                         <div className="completed-metrics-health-list">
-                          {activeDashboardPage.items.map((item) => (
+                          {(activeMetricsTabData.checks || activeMetricsTabData.items).map((item, index) => (
                             <article key={item.label}>
+                              <i aria-hidden="true">{index === 0 ? "✧" : index === 1 ? "↱" : "⌘"}</i>
                               <span>{item.value}</span>
                               <div>
                                 <strong>{item.label}</strong>
                                 <p>{item.note}</p>
                               </div>
+                              <b aria-hidden="true">›</b>
                             </article>
                           ))}
                         </div>
-                      ) : null}
 
-                      <div className="completed-metrics-actions">
-                        <span>Next</span>
-                        {activeDashboardPage.next.map((action) => (
-                          <button type="button" key={action}>{action}</button>
-                        ))}
-                      </div>
-                    </aside>
-                  </div>
-                </section>
-              ) : (
+	                      <div className="completed-metrics-actions">
+	                        <span>Next</span>
+	                        {activeMetricsTabData.next.map((action) => (
+	                          <button type="button" key={action}>{action}<span aria-hidden="true">›</span></button>
+	                        ))}
+	                      </div>
+		                    </aside>
+		                  </div>
+		                </section>
+	              ) : (
                 <>
                   <div className="completed-route-metrics" aria-label={`${activeRouteData.title} metrics`}>
                     {activeDashboardPage.metrics.map((metric) => (
@@ -5351,7 +6045,6 @@ function scoreLabel(score: number): string {
 
 function ProviderLogo({ connector, large = false }: { connector: Connector; large?: boolean }) {
   const [logoFailed, setLogoFailed] = useState(false);
-  const isZoom = connector.providerId === "zoom" || normalizeProviderName(connector.provider).includes("zoom");
 
   useEffect(() => {
     setLogoFailed(false);
@@ -5359,11 +6052,6 @@ function ProviderLogo({ connector, large = false }: { connector: Connector; larg
 
   return (
     <span className={`connector-logo ${large ? "large" : ""}`} aria-hidden="true">
-      {isZoom && logoFailed ? (
-        <svg className="connector-logo-wordmark" viewBox="0 0 92 28" role="img">
-          <text x="46" y="20" textAnchor="middle">zoom</text>
-        </svg>
-      ) : null}
       {connector.logoUrl && !logoFailed ? (
         <img
           src={connector.logoUrl}
@@ -5371,7 +6059,7 @@ function ProviderLogo({ connector, large = false }: { connector: Connector; larg
           onError={() => setLogoFailed(true)}
         />
       ) : null}
-      {isZoom && logoFailed ? null : <b>{connector.provider.slice(0, 1)}</b>}
+      <b>{connector.provider.slice(0, 1)}</b>
     </span>
   );
 }
@@ -5480,59 +6168,6 @@ function EvidenceCard({
       ) : null}
       {caption ? <small>{caption}</small> : null}
     </article>
-  );
-}
-
-function AnimatedStatCard({
-  stat,
-  index
-}: {
-  stat: (typeof marketStats)[number];
-  index: number;
-}) {
-  const ref = useRef<HTMLAnchorElement>(null);
-  const isInView = useInView(ref, { once: true, margin: "-18% 0px" });
-  const [displayValue, setDisplayValue] = useState(stat.value);
-  const decimals = stat.decimals || 0;
-
-  useEffect(() => {
-    if (!isInView) {
-      return;
-    }
-
-    const controls = animate(0, stat.value, {
-      duration: 1.55 + index * 0.18,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: setDisplayValue
-    });
-
-    return () => controls.stop();
-  }, [decimals, index, isInView, stat.value]);
-
-  const formattedValue = displayValue.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals
-  });
-
-  return (
-    <motion.a
-      ref={ref}
-      className="animated-stat-card"
-      href={stat.href}
-      target="_blank"
-      rel="noreferrer"
-      initial={{ opacity: 1, y: 0, scale: 1 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1 }}
-      viewport={{ once: true, margin: "-18% 0px" }}
-      transition={{ duration: 0.72, delay: index * 0.09, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <strong>
-        {stat.prefix}
-        {formattedValue}
-        {stat.suffix}
-      </strong>
-      <span>{stat.label}</span>
-    </motion.a>
   );
 }
 
