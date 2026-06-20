@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type MotionValue } from "framer-motion";
+import { businessCategorySeeds } from "./business-category-data";
+import {
+  buildBusinessTaxonomy,
+  formatBusinessSuggestionLabel,
+  getBusinessMatchEntry,
+  getBusinessSuggestionEntries,
+  type BusinessTaxonomyEntry
+} from "./business-type-matcher";
 import relayclarityLogoUrl from "../assets/relayclarity-logo.svg";
 import demoAgentAvatarUrl from "../assets/demo-agent-avatar.png";
 import workflowConfigureCardUrl from "../assets/workflow-configure-card.png";
@@ -441,13 +449,6 @@ type BusinessPlaybook = {
   connectorDescriptions: Record<string, string>;
   tests: Scenario[];
   launchFocus: string;
-};
-
-type BusinessTaxonomyEntry = {
-  code: string;
-  title: string;
-  playbookId: string;
-  terms: string[];
 };
 
 type BusinessMatch = {
@@ -1180,26 +1181,6 @@ const businessPlaybooks: BusinessPlaybook[] = [
   }
 ];
 
-const businessTypeOptions = [
-  "Bookstore",
-  "Independent bookshop",
-  "Clothing boutique",
-  "Online retail store",
-  "Dental clinic",
-  "GP practice",
-  "Physiotherapy clinic",
-  "Financial adviser",
-  "Insurance broker",
-  "Mortgage broker",
-  "SaaS support team",
-  "IT help desk",
-  "Estate agency",
-  "Lettings agency",
-  "Property management",
-  "Restaurant group",
-  "Hotel reservations",
-  "Event venue"
-];
 const useCaseOptions = fallbackPlaybook.missions;
 const channelOptions = ["Zoom Contact Center production voice queue", "Zoom Phone support line", "Genesys Cloud voice queue"];
 const elevenLabsVoices: VoicePreset[] = [
@@ -1290,219 +1271,41 @@ async function fetchJsonFromApi<T>(path: string, init?: RequestInit): Promise<T>
   throw new Error(errors[errors.length - 1] || "Backend API is unavailable. Start the full dev stack with npm run dev, then try signing in again.");
 }
 
-// Seeded from NAICS-style categories plus common UK service terms. Specific
-// phrase matches are scored higher than generic terms like "shop" or "agency".
-const businessTaxonomy: BusinessTaxonomyEntry[] = [
-  { code: "459210", title: "Book Retailers and News Dealers", playbookId: "bookstore", terms: ["book", "books", "bookstore", "book store", "bookshop", "book shop", "independent bookshop", "bookseller", "booksellers", "book retailer", "comic book shop", "children's bookshop", "academic bookshop", "newsagent", "news agent", "news dealer", "stationery and books", "magazine shop"] },
-  { code: "458110", title: "Clothing and Clothing Accessories Retailers", playbookId: "retail", terms: ["clothing", "clothes", "apparel", "fashion", "retail clothing", "clothing store", "clothes shop", "apparel store", "fashion store", "boutique", "dress shop", "menswear", "womenswear", "children's clothing", "shoe store", "footwear", "jewellery", "jewelry", "watch shop", "accessories store", "sportswear shop", "bridal shop", "tailor", "alterations shop"] },
-  { code: "455", title: "Nonstore and Ecommerce Retailers", playbookId: "retail", terms: ["ecommerce", "e-commerce", "online store", "online shop", "web shop", "shopify store", "marketplace seller", "mail order", "subscription box", "direct to consumer", "d2c brand"] },
-  { code: "456120", title: "Cosmetics, Beauty Supplies, and Perfume Retailers", playbookId: "retail", terms: ["cosmetics store", "beauty supply", "perfume shop", "makeup store", "skincare shop", "salon products", "beauty retailer"] },
-  { code: "449210", title: "Electronics and Appliance Retailers", playbookId: "retail", terms: ["electronics store", "appliance store", "phone shop", "mobile phone shop", "computer store", "camera shop", "audio visual shop", "repair and retail"] },
-  { code: "459310", title: "Florists", playbookId: "retail", terms: ["florist", "flower shop", "plant shop", "garden centre", "garden center", "nursery retail"] },
-  { code: "445110", title: "Supermarkets and Food Retailers", playbookId: "retail", terms: ["grocery store", "supermarket", "food shop", "convenience store", "corner shop", "delicatessen", "deli", "butcher", "fishmonger", "bakery shop", "farm shop", "off licence", "liquor store"] },
-  { code: "459920", title: "Art, Gift, and Specialty Retailers", playbookId: "retail", terms: ["art dealer", "gallery shop", "art store", "gift shop", "homeware shop", "furniture shop", "pet store", "toy shop", "hobby shop", "craft shop", "charity shop"] },
-  { code: "621111", title: "Offices of Physicians", playbookId: "healthcare", terms: ["gp practice", "doctor surgery", "medical practice", "primary care", "family doctor", "walk-in clinic", "urgent care", "private clinic", "health clinic"] },
-  { code: "621210", title: "Offices of Dentists", playbookId: "healthcare", terms: ["dental clinic", "dentist", "orthodontist", "dental practice", "cosmetic dentistry", "hygienist"] },
-  { code: "6213", title: "Other Health Practitioners", playbookId: "healthcare", terms: ["physio", "physiotherapy", "physical therapy", "chiropractor", "osteopath", "podiatrist", "optician", "optometrist", "audiology", "hearing clinic", "therapy clinic", "counselling practice", "counseling practice"] },
-  { code: "6214", title: "Outpatient and Diagnostic Care", playbookId: "healthcare", terms: ["diagnostic clinic", "imaging centre", "imaging center", "blood test clinic", "screening clinic", "fertility clinic", "mental health clinic", "med spa", "aesthetic clinic", "skin clinic", "veterinary clinic", "vet practice"] },
-  { code: "522", title: "Credit Intermediation", playbookId: "financial", terms: ["bank", "credit union", "lender", "loan provider", "consumer credit", "finance company", "leasing company", "card provider", "payment provider"] },
-  { code: "523", title: "Securities and Investment", playbookId: "financial", terms: ["financial adviser", "financial advisor", "wealth manager", "investment adviser", "investment advisor", "ifa", "pension adviser", "retirement planning", "asset management", "brokerage", "stock broker"] },
-  { code: "524", title: "Insurance Carriers and Brokers", playbookId: "financial", terms: ["insurance broker", "insurance agency", "claims handler", "claims management", "life insurance", "home insurance", "motor insurance", "commercial insurance", "underwriter"] },
-  { code: "525", title: "Mortgage and Financial Administration", playbookId: "financial", terms: ["mortgage broker", "mortgage adviser", "accountant", "accountancy firm", "bookkeeping", "payroll bureau", "tax adviser", "tax advisor", "debt advice", "financial services"] },
-  { code: "531110", title: "Property Lessors and Managers", playbookId: "estate", terms: ["property management", "lettings agency", "letting agent", "landlord services", "tenant support", "block management", "strata management", "facilities management", "maintenance reporting"] },
-  { code: "531210", title: "Real Estate Agents and Brokers", playbookId: "estate", terms: ["estate agency", "estate agent", "real estate agency", "real estate agent", "realtor", "property agent", "property sales", "buyer enquiries", "valuation requests", "home valuation"] },
-  { code: "5313", title: "Real Estate Support Services", playbookId: "estate", terms: ["surveyors", "chartered surveyor", "property auction", "auction house", "conveyancing enquiries", "serviced apartments", "holiday lets", "short term rentals"] },
-  { code: "511210", title: "Software Publishers", playbookId: "saas", terms: ["saas", "software company", "software platform", "software product", "mobile app", "web app", "subscription software", "b2b software", "cloud platform", "developer tool", "api platform"] },
-  { code: "518210", title: "Data Processing and Hosting", playbookId: "saas", terms: ["managed hosting", "cloud services", "data platform", "analytics platform", "cybersecurity platform", "identity platform", "payment software", "crm platform", "helpdesk software"] },
-  { code: "5415", title: "Computer Systems Design and IT Services", playbookId: "saas", terms: ["it support", "it help desk", "managed service provider", "msp", "technology consultancy", "systems integrator", "digital agency support", "technical support team", "support desk"] },
-  { code: "722511", title: "Restaurants and Cafes", playbookId: "hospitality", terms: ["restaurant", "restaurant group", "cafe", "coffee shop", "tea room", "takeaway", "food delivery", "pizzeria", "pub kitchen", "bistro", "fine dining", "casual dining"] },
-  { code: "721", title: "Accommodation", playbookId: "hospitality", terms: ["hotel", "guest house", "bed and breakfast", "b&b", "hostel", "serviced accommodation", "hotel reservations", "front desk", "concierge", "room booking"] },
-  { code: "7224", title: "Drinking Places", playbookId: "hospitality", terms: ["bar", "pub", "cocktail bar", "nightclub", "brewery taproom", "wine bar"] },
-  { code: "7113", title: "Events and Venues", playbookId: "hospitality", terms: ["event venue", "wedding venue", "conference venue", "catering company", "events company", "ticketed events", "visitor attraction", "tour operator", "travel agency", "reservation desk"] }
-];
+const businessTaxonomy: BusinessTaxonomyEntry[] = buildBusinessTaxonomy(businessCategorySeeds);
 
 function getBusinessPlaybook(businessType: string): BusinessPlaybook {
   return getBusinessMatch(businessType).playbook;
 }
 
 function getBusinessMatch(businessType: string): BusinessMatch {
-  const normalized = normalizeBusinessInput(businessType);
-  const fallbackMatch = { playbook: fallbackPlaybook, matchedTerms: [], confidence: normalized ? 36 : 0 };
-
-  if (!normalized) {
-    return fallbackMatch;
-  }
-
-  const bestMatch = businessTaxonomy.reduce<{
-    entry: BusinessTaxonomyEntry;
-    score: number;
-    matchedTerms: string[];
-  } | null>((best, entry) => {
-    const matchedTerms = entry.terms.filter((term) => includesBusinessTerm(normalized, term));
-    const score = matchedTerms.reduce((total, term) => total + scoreBusinessTerm(normalized, term), 0);
-
-    if (!matchedTerms.length || score <= 0) {
-      return best;
-    }
-
-    if (!best || score > best.score) {
-      return { entry, score, matchedTerms };
-    }
-
-    return best;
-  }, null);
-
-  if (!bestMatch) {
-    return fallbackMatch;
-  }
-
-  const playbook = businessPlaybooks.find((item) => item.id === bestMatch.entry.playbookId) || fallbackPlaybook;
+  const match = getBusinessMatchEntry(businessType, businessTaxonomy);
+  const playbook = match.entry
+    ? businessPlaybooks.find((item) => item.id === match.entry?.playbookId) || fallbackPlaybook
+    : fallbackPlaybook;
 
   return {
     playbook,
-    entry: bestMatch.entry,
-    matchedTerms: bestMatch.matchedTerms.slice(0, 3),
-    confidence: confidenceFromScore(bestMatch.score)
+    entry: match.entry,
+    matchedTerms: match.matchedTerms,
+    confidence: match.confidence
   };
 }
 
 function getBusinessSuggestions(query: string, limit = 5): BusinessSuggestion[] {
-  const normalized = normalizeBusinessInput(query);
-
-  if (normalized.length < 2) {
-    return [];
-  }
-
-  const suggestions = businessTaxonomy
-    .reduce<BusinessSuggestion[]>((items, entry) => {
-      const matchedTerms = entry.terms
-        .filter((term) => includesBusinessTerm(normalized, term))
-        .sort((first, second) => scoreBusinessTerm(normalized, second) - scoreBusinessTerm(normalized, first));
-      const titleMatch = normalizeBusinessInput(entry.title)
-        .split(" ")
-        .filter((word) => word.length > 3)
-        .some((word) => normalized.includes(word));
-      const score = matchedTerms.reduce((total, term) => total + scoreBusinessTerm(normalized, term), 0) + (titleMatch ? 18 : 0);
-
-      if (score <= 0) {
-        return items;
-      }
-
-      const playbook = businessPlaybooks.find((item) => item.id === entry.playbookId) || fallbackPlaybook;
-
-      items.push({
-        playbook,
-        entry,
-        label: formatBusinessSuggestionLabel(matchedTerms[0] || entry.title),
-        matchedTerms: matchedTerms.slice(0, 3),
-        confidence: confidenceFromScore(score),
-        score
-      });
-
-      return items;
-    }, [])
-    .sort((first, second) => second.score - first.score || second.confidence - first.confidence)
-    .slice(0, limit);
-
-  if (suggestions.length > 0) {
-    return suggestions;
-  }
-
-  const priorityBusinessTypeOptions = ["Dental clinic", "Estate agency", "SaaS support team", "Restaurant group", "Hotel reservations"];
-
-  return priorityBusinessTypeOptions.slice(0, limit).map((option) => {
-    const match = getBusinessMatch(option);
+  return getBusinessSuggestionEntries(query, businessTaxonomy, limit).map((match) => {
+    const playbook = match.entry
+      ? businessPlaybooks.find((item) => item.id === match.entry?.playbookId) || fallbackPlaybook
+      : fallbackPlaybook;
 
     return {
-      ...match,
-      label: option,
-      score: match.confidence
+      playbook,
+      entry: match.entry,
+      label: formatBusinessSuggestionLabel(match.entry?.title || match.matchedTerms[0] || query),
+      matchedTerms: match.matchedTerms,
+      confidence: match.confidence,
+      score: match.score
     };
   });
-}
-
-function formatBusinessSuggestionLabel(value: string): string {
-  const preservedWords: Record<string, string> = {
-    api: "API",
-    b2b: "B2B",
-    "b&b": "B&B",
-    crm: "CRM",
-    d2c: "D2C",
-    gp: "GP",
-    ifa: "IFA",
-    it: "IT",
-    msp: "MSP",
-    saas: "SaaS"
-  };
-
-  return value
-    .split(" ")
-    .map((word) => {
-      const normalized = word.toLowerCase();
-      return preservedWords[normalized] || normalized.charAt(0).toUpperCase() + normalized.slice(1);
-    })
-    .join(" ");
-}
-
-function normalizeBusinessInput(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9+.\s-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function includesBusinessTerm(normalizedInput: string, term: string): boolean {
-  const normalizedTerm = normalizeBusinessInput(term);
-  const exactPhraseMatch = new RegExp(`(^|\\s)${escapeRegExp(normalizedTerm)}($|\\s)`, "i").test(normalizedInput);
-
-  if (exactPhraseMatch) {
-    return true;
-  }
-
-  const inputWords = normalizedInput.split(" ").filter(Boolean);
-  const termWords = normalizedTerm.split(" ").filter(Boolean);
-
-  if (termWords.length < 2) {
-    return false;
-  }
-
-  return termWords.every((termWord) =>
-    inputWords.some((inputWord) => inputWord === termWord || inputWord.startsWith(termWord) || termWord.startsWith(inputWord))
-  );
-}
-
-function scoreBusinessTerm(normalizedInput: string, term: string): number {
-  const normalizedTerm = normalizeBusinessInput(term);
-  const wordCount = normalizedTerm.split(" ").filter(Boolean).length;
-  const specificity = Math.min(20, normalizedTerm.length);
-  const exactBonus = normalizedInput === normalizedTerm ? 36 : 0;
-  return 10 + wordCount * 12 + specificity + exactBonus;
-}
-
-function confidenceFromScore(score: number): number {
-  if (score >= 86) {
-    return 96;
-  }
-
-  if (score >= 64) {
-    return 90;
-  }
-
-  if (score >= 42) {
-    return 82;
-  }
-
-  if (score >= 24) {
-    return 68;
-  }
-
-  return 52;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function tailorConnectors(playbook: BusinessPlaybook, current: Connector[] = initialConnectors): Connector[] {
@@ -4089,12 +3892,12 @@ function Dashboard({
 	                          <div className="simple-workspace-form">
 	                            <label className="workspace-field">
 	                              <span>Business name</span>
-	                              <input
-	                                type="text"
-	                                value={workspaceName}
-                                  onChange={(event) => setWorkspaceName(event.target.value)}
-	                                placeholder="e.g. Bear Lane"
-	                              />
+		                              <input
+		                                type="text"
+		                                value={workspaceName}
+	                                  onChange={(event) => setWorkspaceName(event.target.value)}
+		                                placeholder="Enter business name"
+		                              />
 	                            </label>
 		                            <label className="workspace-field">
 		                              <span>Business type</span>
@@ -4106,10 +3909,10 @@ function Dashboard({
 	                                  if (event.key === "Enter" && businessSuggestions[0]) {
 	                                    event.preventDefault();
 	                                    selectBusinessSuggestion(businessSuggestions[0]);
-	                                  }
-	                                }}
-		                                  placeholder="e.g. dental clinic, estate agency, SaaS support team"
-		                                />
+		                                  }
+		                                }}
+			                                placeholder="Describe your business"
+			                                />
 		                            </label>
                           </div>
                           {businessSuggestions.length > 0 ? (
