@@ -5162,7 +5162,7 @@ function CompletedOnboardingDashboard({
       primaryTitle: dashboardPages.metrics.primaryTitle,
       primaryMeta: dashboardPages.metrics.primaryMeta,
       chart: dashboardPages.metrics.chart || [],
-      chartTotal: "138 calls",
+      chartTotal: `${liveMetrics.callsHandled} calls`,
       items: dashboardPages.metrics.items || [],
       checks: dashboardPages.metrics.items || [],
       next: dashboardPages.metrics.next
@@ -5172,32 +5172,32 @@ function CompletedOnboardingDashboard({
       label: "Outcomes",
       title: "Customer outcomes",
       summary: "Business value, resolution quality, and whether containment is real.",
-      status: "Strong",
+      status: containmentRate >= 80 ? "Strong" : "Watching",
       metrics: [
-        { label: "First-contact resolution", value: "74%", detail: "+6 pts this week" },
-        { label: "Recontact within 24h", value: "4%", detail: "Below 8% target" },
-        { label: "Human time saved", value: "8.6h", detail: "Estimated today" },
-        { label: "CSAT signal", value: "4.7", detail: "From 18 rated calls" }
+        { label: "First-contact resolution", value: `${liveMetrics.firstContactResolution}%`, detail: "Live resolved sample" },
+        { label: "Recontact within 24h", value: `${liveMetrics.recontactRate}%`, detail: "Below 8% target" },
+        { label: "Human time saved", value: `${liveMetrics.humanHoursSaved}h`, detail: "Estimated today" },
+        { label: "CSAT signal", value: liveMetrics.csat.toFixed(1), detail: "Live rated calls" }
       ],
       primaryTitle: "Outcome mix",
       primaryMeta: "Resolved, handed off, and review-needed conversations.",
       chart: [
-        { label: "AI solved", value: 164, display: "82%" },
-        { label: "Human", value: 42, display: "7%" },
-        { label: "Review", value: 66, display: "3" },
-        { label: "Recontact", value: 28, display: "4%" },
-        { label: "CSAT", value: 94, display: "4.7" }
+        { label: "AI solved", value: containmentRate * 2, display: `${containmentRate}%` },
+        { label: "Human", value: handoffRate * 6, display: `${handoffRate}%` },
+        { label: "Review", value: liveMetrics.openRisks * 18, display: String(liveMetrics.openRisks) },
+        { label: "Recontact", value: liveMetrics.recontactRate * 8, display: `${liveMetrics.recontactRate}%` },
+        { label: "CSAT", value: liveMetrics.csat * 20, display: liveMetrics.csat.toFixed(1) }
       ],
-      chartTotal: "82% true containment",
+      chartTotal: `${containmentRate}% true containment`,
       items: [
-        { label: "Resolved by AI", value: "82%", note: "Contained without reopen or later customer recontact." },
-        { label: "Human handoff", value: "7%", note: "Mostly billing exceptions with prepared context." },
-        { label: "Review needed", value: "3", note: "Two billing cases and one sensitive-policy case." }
+        { label: "Resolved by AI", value: `${containmentRate}%`, note: `${liveMetrics.containedCalls} calls contained without reopen or later customer recontact.` },
+        { label: "Human handoff", value: `${handoffRate}%`, note: `${liveMetrics.handoffs} handoffs with prepared context.` },
+        { label: "Review needed", value: String(liveMetrics.openRisks), note: "Open risks are updating from the live review queue." }
       ],
       checks: [
-        { label: "False containment", value: "Low", note: "No clear case where AI closed a request incorrectly." },
-        { label: "Highest-value intent", value: "Billing", note: "Invoice requests are the strongest automation path." },
-        { label: "Customer friction", value: "4%", note: "Low recontact rate suggests the answer held." }
+        { label: "False containment", value: liveMetrics.recontactRate <= 5 ? "Low" : "Med", note: "Derived from recontact movement in the live sample." },
+        { label: "Highest-value intent", value: "Billing", note: "Invoice requests are still the strongest automation path." },
+        { label: "Customer friction", value: `${liveMetrics.recontactRate}%`, note: "Lower recontact rate suggests the answer held." }
       ],
       next: ["Review false containment", "Open top intents", "Export outcome summary"]
     },
@@ -5206,32 +5206,32 @@ function CompletedOnboardingDashboard({
       label: "Voice",
       title: "Voice quality",
       summary: "Latency, speech recognition, interruption handling, and failed turns.",
-      status: "Healthy",
+      status: liveMetrics.p95LatencyMs < 1600 ? "Healthy" : "Tuning",
       metrics: [
-        { label: "p95 turn latency", value: "1.4s", detail: "End to end" },
-        { label: "ASR confidence", value: "94%", detail: "Clear audio" },
-        { label: "Barge-in recovery", value: "88%", detail: "Interruptions handled" },
-        { label: "Silence timeout", value: "2%", detail: "Inside threshold" }
+        { label: "p95 turn latency", value: `${latencySeconds}s`, detail: "End to end" },
+        { label: "ASR confidence", value: `${liveMetrics.asrConfidence}%`, detail: "Clear audio" },
+        { label: "Barge-in recovery", value: `${liveMetrics.bargeInRecovery}%`, detail: "Interruptions handled" },
+        { label: "Silence timeout", value: `${liveMetrics.silenceTimeoutRate}%`, detail: "Inside threshold" }
       ],
       primaryTitle: "Voice signals",
       primaryMeta: "Where the voice experience can still fail a live caller.",
       chart: [
-        { label: "p95", value: 112, display: "1.4s" },
-        { label: "ASR", value: 188, display: "94%" },
-        { label: "Barge-in", value: 176, display: "88%" },
-        { label: "Timeout", value: 24, display: "2%" },
-        { label: "Failed", value: 44, display: "4" }
+        { label: "p95", value: liveMetrics.p95LatencyMs / 12, display: `${latencySeconds}s` },
+        { label: "ASR", value: liveMetrics.asrConfidence * 2, display: `${liveMetrics.asrConfidence}%` },
+        { label: "Barge-in", value: liveMetrics.bargeInRecovery * 2, display: `${liveMetrics.bargeInRecovery}%` },
+        { label: "Timeout", value: liveMetrics.silenceTimeoutRate * 12, display: `${liveMetrics.silenceTimeoutRate}%` },
+        { label: "Failed", value: liveMetrics.failedTurns * 11, display: String(liveMetrics.failedTurns) }
       ],
-      chartTotal: "Healthy voice",
+      chartTotal: `${latencySeconds}s p95`,
       items: [
-        { label: "Slowest turn", value: "2.8s", note: "Billing lookup with CRM context attached." },
-        { label: "Failed turns", value: "4", note: "Mostly caller silence or unclear speech." },
-        { label: "Avg duration", value: "3m 12s", note: "Down 18 seconds from the prior run." }
+        { label: "Slowest turn", value: `${(liveMetrics.p95LatencyMs * 1.9 / 1000).toFixed(1)}s`, note: "Billing lookup with CRM context attached." },
+        { label: "Failed turns", value: String(liveMetrics.failedTurns), note: "Mostly caller silence or unclear speech." },
+        { label: "Active calls", value: String(liveMetrics.activeCalls), note: "Live voice sessions currently in progress." }
       ],
       checks: [
-        { label: "Latency risk", value: "Low", note: "p95 remains inside the launch threshold." },
-        { label: "Interruption risk", value: "Med", note: "Barge-in works, but angry-caller tests need another pass." },
-        { label: "Audio risk", value: "Low", note: "ASR confidence is stable across the sample." }
+        { label: "Latency risk", value: liveMetrics.p95LatencyMs < 1600 ? "Low" : "Med", note: "p95 is calculated from live turn timing." },
+        { label: "Interruption risk", value: liveMetrics.bargeInRecovery >= 88 ? "Low" : "Med", note: "Barge-in updates with the live call sample." },
+        { label: "Audio risk", value: liveMetrics.asrConfidence >= 92 ? "Low" : "Med", note: "ASR confidence is stable across the sample." }
       ],
       next: ["Listen to slow turns", "Tune endpointing", "Retest interruption flow"]
     },
@@ -5240,32 +5240,32 @@ function CompletedOnboardingDashboard({
       label: "Knowledge",
       title: "Knowledge quality",
       summary: "Coverage, citations, stale sources, and answer gaps blocking trust.",
-      status: "91% confident",
+      status: `${liveMetrics.citationCoverage}% confident`,
       metrics: [
-        { label: "Citation coverage", value: "89%", detail: "Approved sources used" },
-        { label: "Retrieval misses", value: "6", detail: "Mostly billing limits" },
-        { label: "Stale sources", value: "1", detail: "Pricing policy" },
-        { label: "Draft answers", value: "2", detail: "Ready to approve" }
+        { label: "Citation coverage", value: `${liveMetrics.citationCoverage}%`, detail: "Approved sources used" },
+        { label: "Retrieval misses", value: String(liveMetrics.retrievalMisses), detail: "Mostly billing limits" },
+        { label: "Stale sources", value: String(liveMetrics.staleSources), detail: "Needs owner review" },
+        { label: "Draft answers", value: String(liveMetrics.draftAnswers), detail: "Ready to approve" }
       ],
       primaryTitle: "Knowledge gaps",
       primaryMeta: "The smallest set of updates likely to improve trust.",
       chart: [
-        { label: "Citations", value: 178, display: "89%" },
-        { label: "Coverage", value: 182, display: "91%" },
-        { label: "Misses", value: 58, display: "6" },
-        { label: "Stale", value: 24, display: "1" },
-        { label: "Drafts", value: 42, display: "2" }
+        { label: "Citations", value: liveMetrics.citationCoverage * 2, display: `${liveMetrics.citationCoverage}%` },
+        { label: "Coverage", value: liveMetrics.citationCoverage * 2, display: `${liveMetrics.citationCoverage}%` },
+        { label: "Misses", value: liveMetrics.retrievalMisses * 10, display: String(liveMetrics.retrievalMisses) },
+        { label: "Stale", value: liveMetrics.staleSources * 24, display: String(liveMetrics.staleSources) },
+        { label: "Drafts", value: liveMetrics.draftAnswers * 18, display: String(liveMetrics.draftAnswers) }
       ],
-      chartTotal: "91% confident",
+      chartTotal: `${liveMetrics.citationCoverage}% confident`,
       items: [
         { label: "Billing exception limits", value: "High", note: "Add what the agent can promise before finance review." },
         { label: "Holiday opening hours", value: "Med", note: "Confirm the latest customer-facing schedule." },
         { label: "Refund status wording", value: "Low", note: "Tighten answer for pending bank transfers." }
       ],
       checks: [
-        { label: "Launch blocker", value: "None", note: "Current gaps can be handled with review routing." },
+        { label: "Launch blocker", value: liveMetrics.staleSources > 2 ? "Source" : "None", note: "Current gaps can be handled with review routing." },
         { label: "Most useful fix", value: "Billing", note: "One policy source would improve several intents." },
-        { label: "Approval queue", value: "2", note: "Draft answers are ready for owner review." }
+        { label: "Approval queue", value: String(liveMetrics.draftAnswers), note: "Draft answers are ready for owner review." }
       ],
       next: ["Approve draft answers", "Upload policy source", "Retest top intents"]
     },
@@ -5274,31 +5274,31 @@ function CompletedOnboardingDashboard({
       label: "Safety",
       title: "Safety and guardrails",
       summary: "Policy, unsupported actions, sensitive escalations, and low-confidence answers.",
-      status: "Passing",
+      status: liveMetrics.policyViolations === 0 ? "Passing" : "Review",
       metrics: [
-        { label: "Policy violations", value: "0", detail: "Reviewed sample clean" },
-        { label: "Unsupported attempts", value: "2", detail: "Blocked correctly" },
-        { label: "Low-confidence answers", value: "5", detail: "Queued for review" },
-        { label: "Sensitive escalations", value: "1", detail: "Handled correctly" }
+        { label: "Policy violations", value: String(liveMetrics.policyViolations), detail: "Reviewed sample" },
+        { label: "Unsupported attempts", value: String(liveMetrics.unsupportedAttempts), detail: "Blocked correctly" },
+        { label: "Low-confidence answers", value: String(liveMetrics.lowConfidenceAnswers), detail: "Queued for review" },
+        { label: "Sensitive escalations", value: String(liveMetrics.sensitiveEscalations), detail: "Handled correctly" }
       ],
       primaryTitle: "Safety queue",
       primaryMeta: "Issues that must stay explainable before launch.",
       chart: [
-        { label: "Policy", value: 20, display: "0" },
-        { label: "Blocked", value: 48, display: "2" },
-        { label: "Low conf", value: 82, display: "5" },
-        { label: "Sensitive", value: 36, display: "1" },
+        { label: "Policy", value: Math.max(20, liveMetrics.policyViolations * 40), display: String(liveMetrics.policyViolations) },
+        { label: "Blocked", value: liveMetrics.unsupportedAttempts * 18, display: String(liveMetrics.unsupportedAttempts) },
+        { label: "Low conf", value: liveMetrics.lowConfidenceAnswers * 13, display: String(liveMetrics.lowConfidenceAnswers) },
+        { label: "Sensitive", value: liveMetrics.sensitiveEscalations * 24, display: String(liveMetrics.sensitiveEscalations) },
         { label: "Guardrails", value: 184, display: "Pass" }
       ],
-      chartTotal: "Passing",
+      chartTotal: liveMetrics.policyViolations === 0 ? "Passing" : "Review",
       items: [
         { label: "Refund authorization", value: "Blocked", note: "Agent asked for review instead of promising a refund." },
         { label: "Sensitive policy", value: "Review", note: "One answer needs wording approval." },
         { label: "Prompt injection", value: "Passed", note: "Test case did not override policy instructions." }
       ],
       checks: [
-        { label: "Launch gate", value: "Pass", note: "No critical safety failures in reviewed calls." },
-        { label: "Needs approval", value: "1", note: "Sensitive policy wording should be checked." },
+        { label: "Launch gate", value: liveMetrics.policyViolations === 0 ? "Pass" : "Review", note: "Critical safety failures are tracked live." },
+        { label: "Needs approval", value: String(liveMetrics.sensitiveEscalations), note: "Sensitive policy wording should be checked." },
         { label: "Guardrail drift", value: "None", note: "Rules are still matching the configured workflow." }
       ],
       next: ["Review flagged call", "Approve policy wording", "Run adversarial test"]
@@ -5308,30 +5308,30 @@ function CompletedOnboardingDashboard({
       label: "Handoffs",
       title: "Human handoffs",
       summary: "Escalation reasons, SLA risk, owner routing, and context quality.",
-      status: "3 pending",
+      status: `${liveMetrics.handoffs} pending`,
       metrics: [
-        { label: "Handoff rate", value: "7%", detail: "Three reviews" },
-        { label: "SLA risk", value: "1", detail: "Due in 22 min" },
-        { label: "Avg handoff", value: "41s", detail: "Context prepared" },
-        { label: "Owner accuracy", value: "96%", detail: "Correct queue" }
+        { label: "Handoff rate", value: `${handoffRate}%`, detail: `${liveMetrics.handoffs} reviews` },
+        { label: "SLA risk", value: String(liveMetrics.slaRisk), detail: "Due soon" },
+        { label: "Avg handoff", value: `${liveMetrics.avgHandoffSeconds}s`, detail: "Context prepared" },
+        { label: "Owner accuracy", value: `${liveMetrics.ownerAccuracy}%`, detail: "Correct queue" }
       ],
       primaryTitle: "Handoff reasons",
       primaryMeta: "Why the agent chose a human path.",
       chart: [
-        { label: "Billing", value: 132, display: "2" },
-        { label: "Policy", value: 72, display: "1" },
-        { label: "SLA", value: 58, display: "1" },
-        { label: "Owner", value: 192, display: "96%" },
+        { label: "Billing", value: Math.max(24, liveMetrics.handoffs * 28), display: String(Math.max(1, liveMetrics.handoffs - liveMetrics.sensitiveEscalations)) },
+        { label: "Policy", value: Math.max(18, liveMetrics.sensitiveEscalations * 40), display: String(liveMetrics.sensitiveEscalations) },
+        { label: "SLA", value: Math.max(18, liveMetrics.slaRisk * 42), display: String(liveMetrics.slaRisk) },
+        { label: "Owner", value: liveMetrics.ownerAccuracy * 2, display: `${liveMetrics.ownerAccuracy}%` },
         { label: "Context", value: 164, display: "Good" }
       ],
-      chartTotal: "3 pending",
+      chartTotal: `${liveMetrics.handoffs} pending`,
       items: [
-        { label: "Billing exception", value: "2", note: "Needs finance owner approval." },
-        { label: "Sensitive policy", value: "1", note: "Check wording before customer reply." },
+        { label: "Billing exception", value: String(Math.max(1, liveMetrics.handoffs - liveMetrics.sensitiveEscalations)), note: "Needs finance owner approval." },
+        { label: "Sensitive policy", value: String(liveMetrics.sensitiveEscalations), note: "Check wording before customer reply." },
         { label: "Knowledge gap", value: "0", note: "No unresolved answer gaps in queue." }
       ],
       checks: [
-        { label: "SLA risk", value: "1", note: "One billing case is due in 22 minutes." },
+        { label: "SLA risk", value: String(liveMetrics.slaRisk), note: "Billing cases nearing due time are tracked live." },
         { label: "Context quality", value: "Good", note: "Summaries include caller need and owner hint." },
         { label: "Routing issue", value: "None", note: "No handoff reached the wrong queue." }
       ],
@@ -5342,32 +5342,32 @@ function CompletedOnboardingDashboard({
       label: "Systems",
       title: "System health",
       summary: "Integration reliability, sync freshness, tool success, and webhook health.",
-      status: "Connected",
+      status: `${completedConnectedCount} connected`,
       metrics: [
-        { label: "CRM lookup success", value: "98%", detail: "HubSpot passing" },
-        { label: "Ticket write success", value: "100%", detail: "Zendesk passing" },
-        { label: "Webhook errors", value: "0", detail: "Zoom ingest healthy" },
-        { label: "Knowledge sync", value: "9m", detail: "Last refreshed" }
+        { label: "CRM lookup success", value: `${liveMetrics.crmLookupSuccess}%`, detail: "HubSpot passing" },
+        { label: "Ticket write success", value: `${liveMetrics.ticketWriteSuccess}%`, detail: "Zendesk passing" },
+        { label: "Webhook errors", value: String(liveMetrics.webhookErrors), detail: "Zoom ingest" },
+        { label: "Knowledge sync", value: `${liveMetrics.knowledgeSyncMinutes}m`, detail: "Last refreshed" }
       ],
       primaryTitle: "System checks",
       primaryMeta: "The production dependencies the agent needs to trust.",
       chart: [
-        { label: "CRM", value: 196, display: "98%" },
-        { label: "Tickets", value: 200, display: "100%" },
-        { label: "Zoom", value: 20, display: "0" },
-        { label: "Sync", value: 84, display: "9m" },
+        { label: "CRM", value: liveMetrics.crmLookupSuccess * 2, display: `${liveMetrics.crmLookupSuccess}%` },
+        { label: "Tickets", value: liveMetrics.ticketWriteSuccess * 2, display: `${liveMetrics.ticketWriteSuccess}%` },
+        { label: "Zoom", value: Math.max(20, liveMetrics.webhookErrors * 24), display: String(liveMetrics.webhookErrors) },
+        { label: "Sync", value: Math.max(20, 160 - liveMetrics.knowledgeSyncMinutes * 6), display: `${liveMetrics.knowledgeSyncMinutes}m` },
         { label: "Export", value: 52, display: "Setup" }
       ],
-      chartTotal: "4 connected",
+      chartTotal: `${completedConnectedCount} connected`,
       items: [
         { label: "Zoom Contact Center", value: "Live", note: "Webhook signature and transcript ingest passing." },
-        { label: "HubSpot", value: "4m", note: "Contact lookup and notes write tested." },
+        { label: "HubSpot", value: `${Math.max(1, liveMetrics.knowledgeSyncMinutes - 2)}m`, note: "Contact lookup and notes write tested." },
         { label: "Analytics export", value: "Setup", note: "Destination still needs schema mapping." }
       ],
       checks: [
         { label: "Production dependency", value: "Analytics", note: "Export setup is the only unfinished integration path." },
-        { label: "Auth health", value: "Good", note: "Connected systems are passing current checks." },
-        { label: "Tool retries", value: "0", note: "No retry loops in today's sample." }
+        { label: "Auth health", value: liveMetrics.crmLookupSuccess >= 96 ? "Good" : "Watch", note: "Connected systems are passing current checks." },
+        { label: "Tool retries", value: String(liveMetrics.webhookErrors), note: "Webhook and tool issues update live." }
       ],
       next: ["Run connection test", "Finish analytics export", "Review OAuth scopes"]
     }
@@ -5577,7 +5577,7 @@ function CompletedOnboardingDashboard({
 		                  <div className="completed-metrics-title-row">
 		                    <div>
 		                      <h2>Production metrics</h2>
-		                      <p>Review the key operating signals for the selected area without changing the dashboard shape.</p>
+		                      <p>Live workspace signals refresh every second while this agent is being set up, tested, and monitored.</p>
 		                    </div>
 		                    <strong><span aria-hidden="true"></span>{activeMetricsTabData.status}</strong>
 		                  </div>
