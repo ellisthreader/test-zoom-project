@@ -4686,8 +4686,11 @@ function CompletedOnboardingDashboard({
     meta: "Workspace"
   };
   const [liveMetrics, setLiveMetrics] = useState<LiveWorkspaceMetrics>(() => createInitialLiveMetrics(activeProject));
+  const openingMetrics = useMemo(() => createInitialLiveMetrics(activeProject), [activeProject.id, activeProject.name]);
   const containmentRate = Math.round((liveMetrics.containedCalls / Math.max(1, liveMetrics.callsHandled)) * 100);
   const handoffRate = Math.round((liveMetrics.handoffs / Math.max(1, liveMetrics.callsHandled)) * 100);
+  const openingContainmentRate = Math.round((openingMetrics.containedCalls / Math.max(1, openingMetrics.callsHandled)) * 100);
+  const openingLatencySeconds = (openingMetrics.p95LatencyMs / 1000).toFixed(1);
   const readinessScore = clampNumber(
     Math.round(
       72 +
@@ -4703,7 +4706,7 @@ function CompletedOnboardingDashboard({
   const latencySeconds = (liveMetrics.p95LatencyMs / 1000).toFixed(1);
   const liveStatus = readinessScore >= 90 ? "Ready" : readinessScore >= 78 ? "Watching" : "Needs review";
   const openingAssistantMessage =
-    `I have checked today's ${activeProject.name} workspace data. Your AI customer agent handled ${liveMetrics.callsHandled} calls, resolved ${containmentRate}% without a human handoff, and kept p95 voice response time at ${latencySeconds}s. The main thing worth your attention is ${liveMetrics.openRisks} open risk${liveMetrics.openRisks === 1 ? "" : "s"} across handoffs, knowledge, and policy checks. I can walk you through the numbers, show the calls behind them, or draft the next action plan.`;
+    `I loaded the ${activeProject.name} workspace snapshot. The preview currently shows ${openingMetrics.callsHandled} calls, ${openingContainmentRate}% resolved without a human handoff, and ${openingLatencySeconds}s p95 voice response time. The main review area is ${openingMetrics.openRisks} open risk${openingMetrics.openRisks === 1 ? "" : "s"} across handoffs, knowledge, and policy checks. I can walk you through the numbers, show the calls behind them, or draft the next action plan.`;
   const agentInsightMetrics = [
     { label: "Calls handled", value: String(liveMetrics.callsHandled), detail: `${liveMetrics.activeCalls} active now` },
     { label: "Resolved by AI", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls contained` },
@@ -5448,9 +5451,9 @@ function CompletedOnboardingDashboard({
     const reply = normalizedPrompt.includes("setup")
       ? "I can help finish setup. The fastest path is to confirm the business type, connect CRM or helpdesk, choose the handoff rules, then run the launch evaluation pack."
       : normalizedPrompt.includes("metric") || normalizedPrompt.includes("today")
-        ? "Today's metrics are stable: 82% containment, 42 customer calls handled, 3 handoffs needing review, and 640ms median voice response start."
+        ? `Current workspace metrics show ${containmentRate}% containment, ${liveMetrics.callsHandled} customer calls handled, ${liveMetrics.handoffs} handoff${liveMetrics.handoffs === 1 ? "" : "s"} needing review, and ${latencySeconds}s p95 voice response time.`
         : normalizedPrompt.includes("handoff")
-          ? "There are 3 handoffs needing owner review. Two are billing exceptions and one is a sensitive policy question that should be checked before tomorrow's launch report."
+          ? `There are ${liveMetrics.handoffs} handoff${liveMetrics.handoffs === 1 ? "" : "s"} needing owner review. The biggest areas are billing exceptions, sensitive policy wording, and SLA risk.`
           : "I can help with setup, metrics, calls, handoffs, knowledge gaps, workflow routing, integrations, launch reports, or agent tuning. Tell me the outcome you want and I will map the next steps.";
 
     setAssistantMessages((current) => [
@@ -6022,7 +6025,7 @@ function CompletedOnboardingDashboard({
                             <section aria-label="Hourly customer call volume">
                               <div className="completed-insight-heading">
                                 <span>Hourly call volume</span>
-                                <strong>42 calls today</strong>
+                                <strong>{liveMetrics.callsHandled} calls today</strong>
                               </div>
                               <div className="completed-volume-chart">
                                 {agentHourlyVolume.map((hour) => (
@@ -6037,7 +6040,7 @@ function CompletedOnboardingDashboard({
                             <section aria-label="Human handoff reasons">
                               <div className="completed-insight-heading">
                                 <span>Handoff reasons</span>
-                                <strong>3 reviews</strong>
+                                <strong>{liveMetrics.handoffs} reviews</strong>
                               </div>
                               <div className="completed-handoff-chart">
                                 {handoffReasons.map((reason) => (
