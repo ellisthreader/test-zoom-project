@@ -44,7 +44,7 @@ export async function createJsonResponse<T>({
         ],
         max_output_tokens: maxOutputTokens,
         reasoning: {
-          effort: 'minimal',
+          effort: 'none',
         },
         text: {
           verbosity: 'low',

@@ -37,7 +37,7 @@ workflow can still be tested end to end.
 
 ```bash
 OPENAI_API_KEY=your_key_here
-OPENAI_MODEL=gpt-5-mini
+OPENAI_MODEL=gpt-5.4-nano
 OPENAI_REALTIME_MODEL=gpt-realtime
 OPENAI_REALTIME_VOICE=alloy
 ELEVENLABS_API_KEY=your_key_here
@@ -212,6 +212,12 @@ This endpoint places a real outbound test call only when
 `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are set.
 Without those credentials it returns mock/setup status so the UI does not
 pretend a call was placed.
+
+## Low-Cost OpenAI Model
+
+The backend reads `OPENAI_API_KEY` and `OPENAI_MODEL` from the environment. For
+now the configured low-cost default is `gpt-5.4-nano`. Set `OPENAI_MODEL` only
+when you want to override that default.
 
 When `ELEVENLABS_API_KEY` and a public HTTPS `PUBLIC_BASE_URL` are set, the
 outbound call generates an ElevenLabs MP3, stores it briefly in memory, and

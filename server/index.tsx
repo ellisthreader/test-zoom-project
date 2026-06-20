@@ -9,6 +9,7 @@ import { listKnowledgeBase } from './adapters/kb.js';
 import { listTickets } from './adapters/helpdesk.js';
 import { connectIntegration, finalizeOAuthConnection, getConnectedIntegrations, listIntegrationProviders, testIntegration } from './adapters/integrations.js';
 import { buildAgentPlan, createTicketFromConversation, runCustomerTurn, runDemoCustomerTurn } from './ai/orchestrator.js';
+import { runWorkspaceAssistant } from './ai/workspace.js';
 import { createRealtimeClientSecret } from './ai/client.js';
 import { synthesizeSpeech } from './voice/elevenlabs.js';
 import { getProviderStatus } from './providers/status.js';
@@ -83,6 +84,14 @@ export function createApp() {
 
   app.get('/api/dashboard/session', (req, res) => {
     res.json({ user: requireAuth(req, res) });
+  });
+
+  app.post('/api/dashboard/assistant', async (req, res, next) => {
+    try {
+      res.json(await runWorkspaceAssistant(req.body));
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/api/kb', (_req, res) => {

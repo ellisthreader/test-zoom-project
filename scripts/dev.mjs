@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 
 const backendPort = Number(process.env.PORT || 8787);
-const backendHealthUrl = `http://127.0.0.1:${backendPort}/api/health`;
+const backendBaseUrl = process.env.API_BASE_URL || `http://127.0.0.1:${backendPort}`;
+const backendHealthUrl = `${backendBaseUrl.replace(/\/$/, "")}/api/health`;
 
 let shuttingDown = false;
 let children = [];
@@ -15,7 +16,10 @@ children = commands.map(([name, command, args]) => {
   const child = spawn(command, args, {
     stdio: "inherit",
     shell: process.platform === "win32",
-    env: process.env
+    env: {
+      ...process.env,
+      VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || backendBaseUrl
+    }
   });
 
   child.on("exit", (code, signal) => {

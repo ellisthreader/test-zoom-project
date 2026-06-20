@@ -29,7 +29,7 @@ export const config = {
     ...defaultAllowedOrigins,
   ])),
   openaiApiKey: process.env.OPENAI_API_KEY || '',
-  openaiModel: process.env.OPENAI_MODEL || 'gpt-5-nano',
+  openaiModel: process.env.OPENAI_MODEL || 'gpt-5.4-nano',
   realtimeModel: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime',
   realtimeVoice: process.env.OPENAI_REALTIME_VOICE || 'alloy',
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY || '',

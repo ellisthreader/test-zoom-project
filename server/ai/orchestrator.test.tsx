@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAgentPlan, createTicketFromConversation, runCustomerTurn } from './orchestrator.js';
+import { runWorkspaceAssistant } from './workspace.js';
 
 test('chat turn asks for missing order number before ticket creation', async () => {
   const result = await runCustomerTurn({
@@ -53,4 +54,32 @@ test('ticket category is normalized into a stable identifier', async () => {
   });
 
   assert.match(ticket.category, /^[a-z0-9_]+$/);
+});
+
+test('workspace assistant cleans metrics and returns chart-ready data', async () => {
+  const result = await runWorkspaceAssistant({
+    message: 'Show me today metrics and handoffs.',
+    project: { id: 'northstar', name: 'Northstar Dental' },
+    metrics: {
+      callsHandled: 10.4,
+      activeCalls: 2,
+      containedCalls: 8,
+      handoffs: 2,
+      openRisks: 1,
+      p95LatencyMs: 1288,
+      citationCoverage: 91,
+      policyViolations: 0,
+      hourlyVolume: [1, 2, 3, 4, 5, 6, 7, 8, 999],
+    },
+    mockAi: true,
+  });
+
+  assert.equal(result.mode, 'mock');
+  assert.equal(result.metrics.callsHandled, 10);
+  assert.equal(result.metrics.containmentRate, 80);
+  assert.equal(result.metrics.latencySeconds, 1.3);
+  assert.equal(result.charts.length, 2);
+  assert.equal(result.charts[0].id, 'hourly-volume');
+  assert.equal(result.charts[0].data.length, 8);
+  assert.equal(result.charts[0].data[7].value, 8);
 });
