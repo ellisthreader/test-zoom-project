@@ -134,6 +134,132 @@ type Project = {
   launchReport?: string;
 };
 
+type LiveWorkspaceMetrics = {
+  tick: number;
+  callsHandled: number;
+  activeCalls: number;
+  containedCalls: number;
+  handoffs: number;
+  openRisks: number;
+  p95LatencyMs: number;
+  csat: number;
+  firstContactResolution: number;
+  recontactRate: number;
+  humanHoursSaved: number;
+  asrConfidence: number;
+  bargeInRecovery: number;
+  silenceTimeoutRate: number;
+  failedTurns: number;
+  citationCoverage: number;
+  retrievalMisses: number;
+  staleSources: number;
+  draftAnswers: number;
+  policyViolations: number;
+  unsupportedAttempts: number;
+  lowConfidenceAnswers: number;
+  sensitiveEscalations: number;
+  ownerAccuracy: number;
+  slaRisk: number;
+  avgHandoffSeconds: number;
+  crmLookupSuccess: number;
+  ticketWriteSuccess: number;
+  webhookErrors: number;
+  knowledgeSyncMinutes: number;
+  hourlyVolume: number[];
+};
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function projectSeed(projectId: string) {
+  return projectId.split("").reduce((total, character) => total + character.charCodeAt(0), 0);
+}
+
+function createInitialLiveMetrics(project: Project): LiveWorkspaceMetrics {
+  const seed = projectSeed(project.id);
+  const isNewWorkspace = !project.launchReport && !["northstar-dental", "cleardbs", "harbour-financial"].includes(project.id);
+  const baseCalls = isNewWorkspace ? 4 + (seed % 7) : 92 + (seed % 48);
+  const handoffs = Math.max(1, Math.round(baseCalls * 0.07));
+
+  return {
+    tick: 0,
+    callsHandled: baseCalls,
+    activeCalls: isNewWorkspace ? 1 + (seed % 3) : 8 + (seed % 6),
+    containedCalls: Math.round(baseCalls * 0.82),
+    handoffs,
+    openRisks: Math.max(1, Math.round(handoffs * 0.6)),
+    p95LatencyMs: 1280 + (seed % 240),
+    csat: 4.5 + ((seed % 4) / 10),
+    firstContactResolution: 72 + (seed % 7),
+    recontactRate: 3 + (seed % 4),
+    humanHoursSaved: Number((baseCalls * 0.062).toFixed(1)),
+    asrConfidence: 91 + (seed % 5),
+    bargeInRecovery: 84 + (seed % 7),
+    silenceTimeoutRate: 2 + (seed % 3),
+    failedTurns: 2 + (seed % 4),
+    citationCoverage: 86 + (seed % 7),
+    retrievalMisses: 3 + (seed % 5),
+    staleSources: seed % 2,
+    draftAnswers: 1 + (seed % 3),
+    policyViolations: 0,
+    unsupportedAttempts: 1 + (seed % 3),
+    lowConfidenceAnswers: 3 + (seed % 5),
+    sensitiveEscalations: 1 + (seed % 2),
+    ownerAccuracy: 94 + (seed % 5),
+    slaRisk: Math.max(0, Math.round(handoffs * 0.25)),
+    avgHandoffSeconds: 38 + (seed % 9),
+    crmLookupSuccess: 96 + (seed % 4),
+    ticketWriteSuccess: 99 + (seed % 2),
+    webhookErrors: 0,
+    knowledgeSyncMinutes: 4 + (seed % 8),
+    hourlyVolume: [6, 14, 30, 24, 17, 22, 15, 10].map((value) => Math.max(1, value + (seed % 5) - 2))
+  };
+}
+
+function advanceLiveMetrics(previous: LiveWorkspaceMetrics): LiveWorkspaceMetrics {
+  const nextTick = previous.tick + 1;
+  const newCall = nextTick % 4 === 0 ? 1 : 0;
+  const newHandoff = newCall && nextTick % 11 === 0 ? 1 : 0;
+  const newContained = newCall && !newHandoff ? 1 : 0;
+  const hourlyVolume = [...previous.hourlyVolume];
+  hourlyVolume[hourlyVolume.length - 1] += newCall;
+
+  return {
+    ...previous,
+    tick: nextTick,
+    callsHandled: previous.callsHandled + newCall,
+    activeCalls: clampNumber(previous.activeCalls + (nextTick % 5 === 0 ? 1 : nextTick % 7 === 0 ? -1 : 0), 0, 24),
+    containedCalls: previous.containedCalls + newContained,
+    handoffs: previous.handoffs + newHandoff,
+    openRisks: clampNumber(previous.openRisks + (newHandoff ? 1 : nextTick % 17 === 0 ? -1 : 0), 0, 12),
+    p95LatencyMs: Math.round(clampNumber(previous.p95LatencyMs + (nextTick % 2 === 0 ? 18 : -13), 980, 1900)),
+    csat: Number(clampNumber(previous.csat + (nextTick % 6 === 0 ? 0.1 : nextTick % 9 === 0 ? -0.1 : 0), 3.8, 5).toFixed(1)),
+    firstContactResolution: clampNumber(previous.firstContactResolution + (newContained && nextTick % 8 === 0 ? 1 : 0), 55, 94),
+    recontactRate: clampNumber(previous.recontactRate + (nextTick % 19 === 0 ? 1 : nextTick % 23 === 0 ? -1 : 0), 1, 12),
+    humanHoursSaved: Number((previous.humanHoursSaved + newContained * 0.08).toFixed(1)),
+    asrConfidence: clampNumber(previous.asrConfidence + (nextTick % 10 === 0 ? 1 : nextTick % 13 === 0 ? -1 : 0), 86, 98),
+    bargeInRecovery: clampNumber(previous.bargeInRecovery + (nextTick % 12 === 0 ? 1 : 0), 78, 96),
+    silenceTimeoutRate: clampNumber(previous.silenceTimeoutRate + (nextTick % 21 === 0 ? 1 : nextTick % 15 === 0 ? -1 : 0), 1, 8),
+    failedTurns: clampNumber(previous.failedTurns + (nextTick % 20 === 0 ? 1 : 0), 0, 14),
+    citationCoverage: clampNumber(previous.citationCoverage + (nextTick % 14 === 0 ? 1 : 0), 78, 98),
+    retrievalMisses: clampNumber(previous.retrievalMisses + (nextTick % 18 === 0 ? 1 : nextTick % 22 === 0 ? -1 : 0), 0, 14),
+    staleSources: clampNumber(previous.staleSources + (nextTick % 45 === 0 ? 1 : 0), 0, 4),
+    draftAnswers: clampNumber(previous.draftAnswers + (nextTick % 16 === 0 ? 1 : nextTick % 29 === 0 ? -1 : 0), 0, 8),
+    unsupportedAttempts: previous.unsupportedAttempts + (nextTick % 31 === 0 ? 1 : 0),
+    lowConfidenceAnswers: clampNumber(previous.lowConfidenceAnswers + (nextTick % 13 === 0 ? 1 : nextTick % 24 === 0 ? -1 : 0), 0, 16),
+    sensitiveEscalations: previous.sensitiveEscalations + (nextTick % 37 === 0 ? 1 : 0),
+    ownerAccuracy: clampNumber(previous.ownerAccuracy + (nextTick % 18 === 0 ? 1 : 0), 88, 99),
+    slaRisk: clampNumber(previous.slaRisk + (newHandoff ? 1 : nextTick % 19 === 0 ? -1 : 0), 0, 8),
+    avgHandoffSeconds: clampNumber(previous.avgHandoffSeconds + (nextTick % 6 === 0 ? 1 : -1), 30, 58),
+    crmLookupSuccess: clampNumber(previous.crmLookupSuccess + (nextTick % 20 === 0 ? 1 : 0), 90, 100),
+    ticketWriteSuccess: clampNumber(previous.ticketWriteSuccess + (nextTick % 33 === 0 ? -1 : nextTick % 17 === 0 ? 1 : 0), 94, 100),
+    webhookErrors: previous.webhookErrors + (nextTick % 59 === 0 ? 1 : 0),
+    knowledgeSyncMinutes: (previous.knowledgeSyncMinutes + 1) % 15,
+    hourlyVolume
+  };
+}
+
 type GoalOption = {
   title: string;
   detail: string;
@@ -2585,6 +2711,8 @@ function Dashboard({
   const [hiddenWorkflowAgentIds, setHiddenWorkflowAgentIds] = useState<string[]>([]);
   const [workflowNodeEdits, setWorkflowNodeEdits] = useState<Record<string, { title?: string; detail?: string }>>({});
   const [workflowNodeOffsets, setWorkflowNodeOffsets] = useState<Record<string, { x: number; y: number }>>({});
+  const [extraWorkflowConnectorKeys, setExtraWorkflowConnectorKeys] = useState<Record<string, string[]>>({});
+  const [isWorkflowAddDrawerOpen, setIsWorkflowAddDrawerOpen] = useState(false);
   const [activeWorkflowNodeDrag, setActiveWorkflowNodeDrag] = useState<{
     nodeId: string;
     startX: number;
@@ -3236,21 +3364,8 @@ function Dashboard({
   ].filter((agent) => !hiddenWorkflowAgentIds.includes(agent.id));
   const activeWorkspaceAgent = workspaceAgents.find((agent) => agent.id === selectedWorkflowAgentId) || workspaceAgents[0] || workflowAgents[0];
   const voiceIntroLine = `Hello, I am your virtual agent for ${confirmedWorkspaceName}. I can help answer questions and get you to the right person.`;
-  const voicePreviewLines = [
-    {
-      label: "Greeting",
-      text: voiceIntroLine
-    },
-    {
-      label: "Booking",
-      text: `Thanks for calling ${confirmedWorkspaceName}. I can check availability, answer quick questions, or get the right person involved.`
-    },
-    {
-      label: "Handoff",
-      text: "I have the main details. I will summarize this for the team so the next person has the context."
-    }
-  ];
-  const activeWorkspaceConnectors = activeWorkspaceAgent.connectorKeys
+  const activeWorkspaceConnectorKeys = activeWorkspaceAgent.connectorKeys;
+  const activeWorkspaceConnectors = activeWorkspaceConnectorKeys
     .map((key) => connectedWorkflowConnectors.find((connector) => connector.key === key))
     .filter((connector): connector is Connector => Boolean(connector));
   const activeWorkspaceConnectorNames = activeWorkspaceConnectors.map((connector) => connector.provider).join(", ");
@@ -3279,7 +3394,35 @@ function Dashboard({
     }
   }, [selectedWorkflowAgentId, workspaceAgents]);
 
-  const gridSize = 24;
+  const boardNodeDefaults: Record<string, { x: number; y: number }> = {
+    trigger: { x: 32, y: 118 },
+    instructions: { x: 286, y: 118 },
+    systems: { x: 540, y: 118 },
+    outcome: { x: 794, y: 118 }
+  };
+  const boardNodeSize = { width: 190, height: 136 };
+  const workflowNodePosition = (nodeId: string) => workflowNodeOffsets[workflowNodeKey(nodeId)] || boardNodeDefaults[nodeId] || { x: 32, y: 118 };
+  const workflowConnections = [
+    ["trigger", "instructions"],
+    ["instructions", "systems"],
+    ["systems", "outcome"]
+  ].map(([from, to]) => {
+    const fromPosition = workflowNodePosition(from);
+    const toPosition = workflowNodePosition(to);
+    const fromX = fromPosition.x + boardNodeSize.width;
+    const fromY = fromPosition.y + boardNodeSize.height / 2;
+    const toX = toPosition.x;
+    const toY = toPosition.y + boardNodeSize.height / 2;
+    const connected = toX > fromX - 16 && toX - fromX < 148 && Math.abs(toY - fromY) < 88;
+
+    return {
+      from,
+      to,
+      connected,
+      path: `M ${fromX} ${fromY} C ${fromX + 42} ${fromY}, ${toX - 42} ${toY}, ${toX} ${toY}`
+    };
+  });
+  const gridSize = 16;
   const workflowPositionStyle = (id: string): React.CSSProperties => ({
     transform: `translate(${workflowLayout[id]?.x ?? 24}px, ${workflowLayout[id]?.y ?? 24}px)`
   });
@@ -3380,7 +3523,7 @@ function Dashboard({
       return;
     }
 
-    const currentOffset = workflowNodeOffsets[workflowNodeKey(nodeId)] || { x: 0, y: 0 };
+    const currentOffset = workflowNodePosition(nodeId);
     event.currentTarget.setPointerCapture(event.pointerId);
     setActiveWorkflowNodeDrag({
       nodeId,
@@ -3397,11 +3540,18 @@ function Dashboard({
       return;
     }
 
+    const rect = workflowCanvasRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+
     const deltaX = event.clientX - activeWorkflowNodeDrag.startX;
     const deltaY = event.clientY - activeWorkflowNodeDrag.startY;
     const moved = activeWorkflowNodeDrag.moved || Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
-    const x = Math.max(-34, Math.min(34, activeWorkflowNodeDrag.originX + deltaX));
-    const y = Math.max(-28, Math.min(28, activeWorkflowNodeDrag.originY + deltaY));
+    const maxX = Math.max(24, rect.width - boardNodeSize.width - 24);
+    const maxY = Math.max(24, rect.height - boardNodeSize.height - 24);
+    const x = Math.max(24, Math.min(maxX, Math.round((activeWorkflowNodeDrag.originX + deltaX) / gridSize) * gridSize));
+    const y = Math.max(24, Math.min(maxY, Math.round((activeWorkflowNodeDrag.originY + deltaY) / gridSize) * gridSize));
 
     setWorkflowNodeOffsets((current) => ({
       ...current,
@@ -3424,10 +3574,20 @@ function Dashboard({
   };
 
   const workflowNodeOffsetStyle = (nodeId: string): React.CSSProperties => {
-    const offset = workflowNodeOffsets[workflowNodeKey(nodeId)] || { x: 0, y: 0 };
+    const offset = workflowNodePosition(nodeId);
     return {
-      transform: `translate(${offset.x}px, ${offset.y}px)`
+      left: offset.x,
+      top: offset.y
     };
+  };
+
+  const addWorkflowConnector = (connectorKey: string) => {
+    setExtraWorkflowConnectorKeys((current) => {
+      const keys = current[activeWorkspaceAgent.id] || [];
+      return keys.includes(connectorKey)
+        ? current
+        : { ...current, [activeWorkspaceAgent.id]: [...keys, connectorKey] };
+    });
   };
 
   const deleteWorkflowAgent = (agentId: string) => {
@@ -3489,19 +3649,6 @@ function Dashboard({
     const y = 456 + Math.floor(customActions.length / 2) * 116;
     setCustomActions((current) => [...current, { id, name: action, detail: "Configure this action" }]);
     setWorkflowLayout((current) => ({ ...current, [id]: { x, y } }));
-  };
-
-  const playBrowserVoiceFallback = (text = previewText, voice = selectedVoice) => {
-    if (!("speechSynthesis" in window)) {
-      return false;
-    }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = voiceSpeed;
-    utterance.pitch = voice.id === "adam" ? 0.92 : 1;
-    window.speechSynthesis.speak(utterance);
-    return true;
   };
 
   const generateVoicePreview = async (voice = selectedVoice, textToRead = previewText) => {
@@ -3984,10 +4131,17 @@ function Dashboard({
                                   <strong>{activeWorkspaceAgent.name}</strong>
                                 </div>
                                 <div className="workflow-toolbar" aria-label="Workspace tools">
-                                  <button type="button" onClick={addWorkflowApp}>+ App</button>
+                                  <button type="button" onClick={() => setIsWorkflowAddDrawerOpen(true)}>+ Add</button>
                                 </div>
                               </div>
-                              <div className="workflow-workspace-board">
+                              <div className="workflow-workspace-board" ref={workflowCanvasRef}>
+                                <svg className="workflow-connection-layer" aria-hidden="true">
+                                  {workflowConnections.map((connection) => (
+                                    connection.connected ? (
+                                      <path className="is-connected" d={connection.path} key={`${connection.from}-${connection.to}`} />
+                                    ) : null
+                                  ))}
+                                </svg>
                                 <article
                                   className="workflow-node workflow-trigger"
                                   style={workflowNodeOffsetStyle("trigger")}
@@ -4000,7 +4154,6 @@ function Dashboard({
                                   <strong>{workflowNodeContent.trigger.title}</strong>
                                   <p>{workflowNodeContent.trigger.detail}</p>
                                 </article>
-                                <i aria-hidden="true" />
                                 <article
                                   className="workflow-node workflow-agent"
                                   style={workflowNodeOffsetStyle("instructions")}
@@ -4013,7 +4166,6 @@ function Dashboard({
                                   <strong>{workflowNodeContent.instructions.title}</strong>
                                   <p>{workflowNodeContent.instructions.detail}</p>
                                 </article>
-                                <i aria-hidden="true" />
                                 <div
                                   className="workflow-tool-panel"
                                   aria-label={`${activeWorkspaceAgent.label} connected systems`}
@@ -4042,7 +4194,6 @@ function Dashboard({
                                     ) : null}
                                   </div>
                                 </div>
-                                <i aria-hidden="true" />
                                 <article
                                   className="workflow-node workflow-action-a"
                                   style={workflowNodeOffsetStyle("outcome")}
@@ -4056,6 +4207,47 @@ function Dashboard({
                                   <p>{workflowNodeContent.outcome.detail}</p>
                                 </article>
                               </div>
+                              <AnimatePresence>
+                                {isWorkflowAddDrawerOpen ? (
+                                  <motion.aside
+                                    className="workflow-add-drawer"
+                                    aria-label="Add to workflow"
+                                    initial={{ x: 320, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: 320, opacity: 0 }}
+                                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                  >
+                                    <div className="workflow-add-drawer-header">
+                                      <div>
+                                        <span>Add</span>
+                                        <strong>Workflow items</strong>
+                                      </div>
+                                      <button type="button" onClick={() => setIsWorkflowAddDrawerOpen(false)} aria-label="Close add panel">×</button>
+                                    </div>
+                                    <div className="workflow-add-section">
+                                      <span>Connected apps</span>
+                                      {connectedWorkflowConnectors.map((connector) => (
+                                        <button type="button" onClick={() => addWorkflowConnector(connector.key)} key={connector.key}>
+                                          <ProviderLogo connector={connector} />
+                                          <strong>{connector.provider}</strong>
+                                          <small>{activeWorkspaceConnectorKeys.includes(connector.key) ? "Added" : connector.name}</small>
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <div className="workflow-add-section">
+                                      <span>Blocks</span>
+                                      <button type="button" onClick={addWorkflowAgent}>
+                                        <strong>Agent</strong>
+                                        <small>Add another agent to the left rail</small>
+                                      </button>
+                                      <button type="button" onClick={addWorkflowAction}>
+                                        <strong>Action</strong>
+                                        <small>Add a follow-up action below the board</small>
+                                      </button>
+                                    </div>
+                                  </motion.aside>
+                                ) : null}
+                              </AnimatePresence>
                             </section>
                           </div>
                           {(customApps.length || customActions.length) ? (
@@ -4493,31 +4685,40 @@ function CompletedOnboardingDashboard({
     name: "Project",
     meta: "Workspace"
   };
+  const [liveMetrics, setLiveMetrics] = useState<LiveWorkspaceMetrics>(() => createInitialLiveMetrics(activeProject));
+  const containmentRate = Math.round((liveMetrics.containedCalls / Math.max(1, liveMetrics.callsHandled)) * 100);
+  const handoffRate = Math.round((liveMetrics.handoffs / Math.max(1, liveMetrics.callsHandled)) * 100);
+  const readinessScore = clampNumber(
+    Math.round(
+      72 +
+        containmentRate * 0.16 +
+        liveMetrics.citationCoverage * 0.07 +
+        liveMetrics.asrConfidence * 0.05 -
+        liveMetrics.openRisks * 1.2 -
+        liveMetrics.policyViolations * 4
+    ),
+    0,
+    99
+  );
+  const latencySeconds = (liveMetrics.p95LatencyMs / 1000).toFixed(1);
+  const liveStatus = readinessScore >= 90 ? "Ready" : readinessScore >= 78 ? "Watching" : "Needs review";
   const openingAssistantMessage =
-    `I have checked today's ${activeProject.name} workspace data. Your AI customer agent handled 42 calls, resolved 82% without a human handoff, and kept median voice response start at 640ms. The main thing worth your attention is a small cluster of billing exceptions and sensitive-policy escalations. I can walk you through the numbers, show the calls behind them, or draft the next action plan.`;
+    `I have checked today's ${activeProject.name} workspace data. Your AI customer agent handled ${liveMetrics.callsHandled} calls, resolved ${containmentRate}% without a human handoff, and kept p95 voice response time at ${latencySeconds}s. The main thing worth your attention is ${liveMetrics.openRisks} open risk${liveMetrics.openRisks === 1 ? "" : "s"} across handoffs, knowledge, and policy checks. I can walk you through the numbers, show the calls behind them, or draft the next action plan.`;
   const agentInsightMetrics = [
-    { label: "Calls handled", value: "42", detail: "+18% vs yesterday" },
-    { label: "Resolved by AI", value: "82%", detail: "34 calls contained" },
-    { label: "Median response", value: "640ms", detail: "Stable voice start" },
-    { label: "Review needed", value: "3", detail: "2 billing, 1 policy" }
+    { label: "Calls handled", value: String(liveMetrics.callsHandled), detail: `${liveMetrics.activeCalls} active now` },
+    { label: "Resolved by AI", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls contained` },
+    { label: "p95 response", value: `${latencySeconds}s`, detail: "Live voice turn" },
+    { label: "Review needed", value: String(liveMetrics.openRisks), detail: `${liveMetrics.handoffs} handoffs today` }
   ];
-  const agentHourlyVolume = [
-    { label: "08:00", value: 7 },
-    { label: "09:00", value: 11 },
-    { label: "10:00", value: 8 },
-    { label: "11:00", value: 6 },
-    { label: "12:00", value: 10 }
-  ];
-  const metricsHourlyVolume = [
-    { label: "07:00", value: 6 },
-    { label: "08:00", value: 14 },
-    { label: "09:00", value: 30 },
-    { label: "10:00", value: 24 },
-    { label: "11:00", value: 17 },
-    { label: "12:00", value: 22 },
-    { label: "13:00", value: 15 },
-    { label: "14:00", value: 10 }
-  ];
+  const liveHourLabels = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "Now"];
+  const agentHourlyVolume = liveHourLabels.slice(-5).map((label, index) => ({
+    label,
+    value: liveMetrics.hourlyVolume.slice(-5)[index] || 0
+  }));
+  const metricsHourlyVolume = liveHourLabels.map((label, index) => ({
+    label,
+    value: liveMetrics.hourlyVolume[index] || 0
+  }));
   const handoffReasons = [
     { label: "Billing exception", value: 2, percent: 67 },
     { label: "Sensitive policy", value: 1, percent: 33 },
@@ -4834,20 +5035,20 @@ function CompletedOnboardingDashboard({
       eyebrow: "Production readiness",
       title: "Customer agent is ready to operate.",
       summary: "RelayClarity is tracking the outcome, safety, voice, knowledge, and integration signals that decide whether this agent can run in production.",
-      status: "Ready",
+      status: liveStatus,
       metrics: [
-        { label: "Readiness score", value: "92%", detail: "All critical gates passing" },
-        { label: "True containment", value: "82%", detail: "No reopen or recontact" },
-        { label: "p95 turn latency", value: "1.4s", detail: "Voice response end to end" },
-        { label: "Open risks", value: "3", detail: "2 billing, 1 policy" }
+        { label: "Readiness score", value: `${readinessScore}%`, detail: "Live launch gates" },
+        { label: "True containment", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} contained` },
+        { label: "p95 turn latency", value: `${latencySeconds}s`, detail: "Voice response end to end" },
+        { label: "Open risks", value: String(liveMetrics.openRisks), detail: "Live review queue" }
       ],
       primaryTitle: "Call demand by hour",
       primaryMeta: "Today with launch-readiness checks attached.",
       chart: metricsHourlyVolume.map((hour) => ({ ...hour, value: hour.value * 5, display: String(hour.value) })),
       items: [
-        { label: "Safety gate", value: "0", note: "No policy violations in today's reviewed calls." },
-        { label: "Handoff rate", value: "7%", note: "Three conversations need owner review." },
-        { label: "Knowledge confidence", value: "91%", note: "Two draft answers are ready to approve." }
+        { label: "Safety gate", value: String(liveMetrics.policyViolations), note: `${liveMetrics.policyViolations} policy violation${liveMetrics.policyViolations === 1 ? "" : "s"} in reviewed calls.` },
+        { label: "Handoff rate", value: `${handoffRate}%`, note: `${liveMetrics.handoffs} conversation${liveMetrics.handoffs === 1 ? "" : "s"} need owner review.` },
+        { label: "Knowledge confidence", value: `${liveMetrics.citationCoverage}%`, note: `${liveMetrics.draftAnswers} draft answer${liveMetrics.draftAnswers === 1 ? "" : "s"} ready to approve.` }
       ],
       next: ["Review open risks", "Approve knowledge updates", "Export launch report"]
     },
@@ -5187,6 +5388,18 @@ function CompletedOnboardingDashboard({
   const hasChart = (page: DashboardPage): page is DashboardPage & { chart: DashboardChartBar[] } => "chart" in page;
   const hasBars = (page: DashboardPage): page is DashboardPage & { bars: DashboardProgressBar[] } => "bars" in page;
   const activeDashboardPage = activeRoute === "ai" ? null : dashboardPages[activeRoute];
+
+  useEffect(() => {
+    setLiveMetrics(createInitialLiveMetrics(activeProject));
+  }, [activeProject.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setLiveMetrics((current) => advanceLiveMetrics(current));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [activeProject.id]);
 
   useEffect(() => {
     setIsRouteMenuOpen(false);
