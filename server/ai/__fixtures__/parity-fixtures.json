@@ -1,0 +1,410 @@
+[
+  {
+    "input": {
+      "transcriptText": "The customer says this is fraud, threatens legal action and a lawsuit, and demands a manager.",
+      "summary": "Fraud and legal threat",
+      "category": "fraud",
+      "priority": "urgent",
+      "sentiment": "negative",
+      "customerTier": "vip",
+      "callOutcome": "handoff",
+      "channel": "zoom_contact_center",
+      "confidence": 0.28,
+      "previousOpenTickets": 4,
+      "escalate": true,
+      "durationSeconds": 720
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 3.622226077950605e-22,
+        "medium": 4.1237776084418825e-10,
+        "high": 0.9999999995876223
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "Customer asked whether the office is open on Saturday and accepted the answer.",
+      "summary": "Opening hours",
+      "category": "general_support",
+      "priority": "low",
+      "sentiment": "neutral",
+      "customerTier": "standard",
+      "callOutcome": "resolved",
+      "channel": "chat",
+      "confidence": 0.95,
+      "previousOpenTickets": 0,
+      "escalate": false,
+      "durationSeconds": 75
+    },
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.9997141555058989,
+        "medium": 0.00028584210168648304,
+        "high": 2.3924146095488037e-09
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "I have a question about my invoice and a refund that has not arrived yet.",
+      "summary": "Invoice and refund query",
+      "category": "billing",
+      "priority": "normal",
+      "sentiment": "frustrated",
+      "customerTier": "standard",
+      "callOutcome": "review",
+      "channel": "email",
+      "confidence": 0.66,
+      "previousOpenTickets": 1,
+      "escalate": false,
+      "durationSeconds": 240
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 0.00377065689602529,
+        "medium": 0.4952117195665069,
+        "high": 0.5010176235374678
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "Thanks for the quick help upgrading my plan.",
+      "summary": "Plan upgrade",
+      "category": "account",
+      "priority": "normal",
+      "sentiment": "positive",
+      "customerTier": "vip",
+      "callOutcome": "resolved",
+      "channel": "chat",
+      "confidence": 0.9,
+      "previousOpenTickets": 0,
+      "escalate": false,
+      "durationSeconds": 130
+    },
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.9541169696670884,
+        "medium": 0.04585286781066359,
+        "high": 3.0162522248100997e-05
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "Caller wants to confirm the delivery date for their order.",
+      "summary": "Delivery date",
+      "category": "delivery",
+      "priority": "normal",
+      "sentiment": "neutral",
+      "customerTier": "standard",
+      "callOutcome": "resolved",
+      "channel": "voice",
+      "confidence": 0.81,
+      "previousOpenTickets": 0,
+      "escalate": false,
+      "durationSeconds": 200
+    },
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.9891193852796781,
+        "medium": 0.010878058335933076,
+        "high": 2.5563843887836426e-06
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "Please pass this to a human, I would like more help.",
+      "summary": "Handoff requested",
+      "category": "general_support",
+      "priority": "normal",
+      "sentiment": "neutral",
+      "customerTier": "standard",
+      "callOutcome": "handoff",
+      "channel": "chat",
+      "confidence": 0.7,
+      "previousOpenTickets": 1,
+      "escalate": true,
+      "durationSeconds": 160
+    },
+    "expected": {
+      "riskLevel": "medium",
+      "classProbabilities": {
+        "low": 0.23234116827681095,
+        "medium": 0.7454337469736058,
+        "high": 0.022225084749583242
+      }
+    }
+  },
+  {
+    "input": {},
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.9971759636648884,
+        "medium": 0.002823893317253435,
+        "high": 1.4301785826027579e-07
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "hello"
+    },
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.9971759636648884,
+        "medium": 0.002823893317253435,
+        "high": 1.4301785826027579e-07
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "Following up again on my still-open ticket.",
+      "summary": "Repeat follow-up",
+      "category": "general_support",
+      "priority": "high",
+      "sentiment": "frustrated",
+      "customerTier": "standard",
+      "callOutcome": "review",
+      "channel": "email",
+      "confidence": 0.62,
+      "previousOpenTickets": 5,
+      "escalate": false,
+      "durationSeconds": 300
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 1.912498866337208e-05,
+        "medium": 0.035647533921685085,
+        "high": 0.9643333410896516
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "We spent a long time going through the technical setup.",
+      "summary": "Long technical session",
+      "category": "technical",
+      "priority": "normal",
+      "sentiment": "neutral",
+      "customerTier": "standard",
+      "callOutcome": "resolved",
+      "channel": "voice",
+      "confidence": 0.77,
+      "previousOpenTickets": 0,
+      "escalate": false,
+      "durationSeconds": 900
+    },
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.9658929616282259,
+        "medium": 0.03409110580116818,
+        "high": 1.5932570605959593e-05
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "I am really not happy with how this went.",
+      "summary": "Dissatisfied",
+      "category": "general_support",
+      "priority": "normal",
+      "sentiment": "negative",
+      "customerTier": "standard",
+      "callOutcome": "review",
+      "channel": "chat",
+      "confidence": 0.6,
+      "previousOpenTickets": 1,
+      "escalate": false,
+      "durationSeconds": 210
+    },
+    "expected": {
+      "riskLevel": "medium",
+      "classProbabilities": {
+        "low": 0.37093805294376303,
+        "medium": 0.6206814244858719,
+        "high": 0.008380522570365046
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "I think there was unauthorized access to my account, possible breach.",
+      "summary": "Possible account breach",
+      "category": "security",
+      "priority": "high",
+      "sentiment": "negative",
+      "customerTier": "standard",
+      "callOutcome": "review",
+      "channel": "email",
+      "confidence": 0.55,
+      "previousOpenTickets": 2,
+      "escalate": false,
+      "durationSeconds": 360
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 1.980010443483446e-09,
+        "medium": 0.0004442691883151159,
+        "high": 0.9995557288316744
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "This is a fraud and a breach, I want to cancel, file a complaint, threaten legal action, chargeback now.",
+      "summary": "Multiple risk terms",
+      "category": "billing",
+      "priority": "urgent",
+      "sentiment": "angry",
+      "customerTier": "vip",
+      "callOutcome": "handoff",
+      "channel": "voice",
+      "confidence": 0.3,
+      "previousOpenTickets": 3,
+      "escalate": true,
+      "durationSeconds": 540
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 6.827609734407485e-22,
+        "medium": 5.548706009431212e-10,
+        "high": 0.9999999994451294
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "Not sure what the customer wants exactly.",
+      "summary": "Ambiguous",
+      "category": "general_support",
+      "priority": "normal",
+      "sentiment": "neutral",
+      "customerTier": "standard",
+      "callOutcome": "review",
+      "channel": "chat",
+      "confidence": 0.42,
+      "previousOpenTickets": 0,
+      "escalate": false,
+      "durationSeconds": 120
+    },
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.6615962633559036,
+        "medium": 0.33698515129072437,
+        "high": 0.0014185853533719695
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "The app failed and I cannot access my dashboard, it is broken.",
+      "summary": "Outage",
+      "category": "technical",
+      "priority": "high",
+      "sentiment": "frustrated",
+      "customerTier": "standard",
+      "callOutcome": "failed",
+      "channel": "chat",
+      "confidence": 0.58,
+      "previousOpenTickets": 2,
+      "escalate": false,
+      "durationSeconds": 480
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 9.141799142070593e-09,
+        "medium": 0.0011539710048758013,
+        "high": 0.9988460198533251
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "I want to cancel my subscription and request a refund.",
+      "summary": "Cancellation",
+      "category": "billing",
+      "priority": "high",
+      "sentiment": "negative",
+      "customerTier": "standard",
+      "callOutcome": "review",
+      "channel": "email",
+      "confidence": 0.64,
+      "previousOpenTickets": 1,
+      "escalate": false,
+      "durationSeconds": 280
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 2.2025251373048512e-05,
+        "medium": 0.04074922022467766,
+        "high": 0.9592287545239493
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "Everything is resolved, thank you so much for the help.",
+      "summary": "Resolved happily",
+      "category": "account",
+      "priority": "low",
+      "sentiment": "positive",
+      "customerTier": "vip",
+      "callOutcome": "resolved",
+      "channel": "voice",
+      "confidence": 0.93,
+      "previousOpenTickets": 0,
+      "escalate": false,
+      "durationSeconds": 95
+    },
+    "expected": {
+      "riskLevel": "low",
+      "classProbabilities": {
+        "low": 0.9955488715067076,
+        "medium": 0.004450755056829184,
+        "high": 3.734364632402438e-07
+      }
+    }
+  },
+  {
+    "input": {
+      "transcriptText": "This is an emergency, the situation is unsafe and I feel vulnerable.",
+      "summary": "Safety emergency",
+      "category": "policy",
+      "priority": "urgent",
+      "sentiment": "negative",
+      "customerTier": "standard",
+      "callOutcome": "handoff",
+      "channel": "voice",
+      "confidence": 0.35,
+      "previousOpenTickets": 1,
+      "escalate": true,
+      "durationSeconds": 410
+    },
+    "expected": {
+      "riskLevel": "high",
+      "classProbabilities": {
+        "low": 2.9345901142810155e-14,
+        "medium": 2.618944038650661e-06,
+        "high": 0.999997381055932
+      }
+    }
+  }
+]

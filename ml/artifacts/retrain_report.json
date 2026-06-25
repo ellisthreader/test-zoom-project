@@ -1,0 +1,48 @@
+{
+  "current": {
+    "modelVersion": "risk-scoring-logreg-1.0.0",
+    "accuracy": 0.8042,
+    "macroF1": 0.7692,
+    "highRecall": 0.8541,
+    "fairnessDisparityGap": 0.2059,
+    "fairnessSlices": {
+      "standard": 0.4734,
+      "vip": 0.6793,
+      "premium": 0.4739
+    }
+  },
+  "candidate": {
+    "modelVersion": "risk-scoring-logreg-1.0.1",
+    "accuracy": 0.8033,
+    "macroF1": 0.7693,
+    "highRecall": 0.8511,
+    "fairnessDisparityGap": 0.2031,
+    "fairnessSlices": {
+      "standard": 0.472,
+      "vip": 0.6751,
+      "premium": 0.4739
+    }
+  },
+  "gateThresholds": {
+    "accuracy": 0.7,
+    "high_recall": 0.7,
+    "macro_f1": 0.65,
+    "recallRegressionTolerance": 0.02,
+    "fairnessRegressionTolerance": 0.02
+  },
+  "gates": {
+    "accuracy": true,
+    "highRecall": true,
+    "macroF1": true,
+    "noRecallRegression": true,
+    "noFairnessRegression": true
+  },
+  "gatesPassed": true,
+  "promoteRequested": false,
+  "promoted": false,
+  "counts": {
+    "synthetic": 4800,
+    "feedback": 1,
+    "feedbackWeight": 5.0
+  }
+}

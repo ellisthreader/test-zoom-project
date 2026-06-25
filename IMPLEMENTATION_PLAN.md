@@ -81,10 +81,25 @@ The next engineering build should add:
 5. Exportable handoff packs as Markdown and JSON.
 6. Tests for scenario scoring, report generation, and UI state changes.
 
+## Machine Learning (Implemented)
+
+The case-risk scorer is now a real trained model, not just a heuristic:
+
+- `ml/` — scikit-learn logistic-regression pipeline over a shared feature
+  contract (`ml/features.py` ↔ `server/ai/risk-features.tsx`).
+- Synthetic data generation, training, and an evaluation gate (accuracy,
+  macro-F1, high-risk recall, confusion matrix, fairness slices).
+- Portable JSON model artifact served natively by `server/ai/risk-model.tsx`,
+  with the original heuristic as a deterministic fallback.
+- Drift monitoring (PSI vs training baseline) and a human-override feedback loop
+  that exports labelled rows for retraining.
+- Governance docs: `docs/model-card.md`, `docs/responsible-ai.md`.
+
+Run it with `npm run ml:pipeline`.
+
 ## Known Limits
 
-- Current metrics are illustrative.
-- Tool calls are simulated.
-- There is no real ASR, TTS, telephony, retrieval, CRM, or authentication yet.
-- The current build is a polished product prototype showing the software
-  workflow and brand direction.
+- The model is trained on synthetic data, so it does not prove real-world
+  performance; it demonstrates the production ML lifecycle and governance.
+- Other tool calls (telephony, retrieval, CRM) remain simulated.
+- There is no real ASR, TTS, or authentication on the public demo yet.

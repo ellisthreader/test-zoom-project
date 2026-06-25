@@ -9,6 +9,11 @@ import { listKnowledgeBase } from './adapters/kb.js';
 import { listTickets } from './adapters/helpdesk.js';
 import { connectIntegration, finalizeOAuthConnection, getConnectedIntegrations, listIntegrationProviders, testIntegration } from './adapters/integrations.js';
 import { buildAgentPlan, createTicketFromConversation, runCustomerTurn, runDemoCustomerTurn } from './ai/orchestrator.js';
+import { runScenarioTest } from './ai/launch-tests.js';
+import { ticketToRiskQueueItem } from './ai/risk-scoring.js';
+import { getModelEvaluation, getModelInfo, scoreRisk } from './ai/risk-model.js';
+import { buildDriftReport, recordPrediction } from './ai/monitoring.js';
+import { buildFeedbackReport, exportTrainingFeedback, recordRiskDecision } from './ai/feedback-store.js';
 import { runWorkspaceAssistant } from './ai/workspace.js';
 import { createRealtimeClientSecret } from './ai/client.js';
 import { synthesizeSpeech } from './voice/elevenlabs.js';
@@ -98,8 +103,65 @@ export function createApp() {
     res.json({ items: listKnowledgeBase() });
   });
 
-  app.get('/api/tickets', async (_req, res) => {
-    res.json({ items: await listTickets() });
+  app.get('/api/tickets', async (req, res) => {
+    const tickets = await listTickets();
+    const items = req.query.sort === 'risk'
+      ? [...tickets].sort((first, second) => (second.riskScore || 0) - (first.riskScore || 0))
+      : tickets;
+
+    res.json({ items });
+  });
+
+  app.post('/api/risk/score', (req, res, next) => {
+    try {
+      const result = scoreRisk(req.body);
+      recordPrediction(result, req.body);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/risk/model', (_req, res) => {
+    res.json(getModelInfo());
+  });
+
+  app.get('/api/risk/evaluation', (_req, res) => {
+    const evaluation = getModelEvaluation();
+    if (!evaluation) {
+      res.status(404).json({ error: 'No evaluation report found. Run the ML pipeline to generate it.' });
+      return;
+    }
+    res.json(evaluation);
+  });
+
+  app.post('/api/risk/feedback', (req, res, next) => {
+    try {
+      res.status(201).json(recordRiskDecision(req.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/monitoring/drift-report', (_req, res) => {
+    res.json(buildDriftReport());
+  });
+
+  app.get('/api/monitoring/feedback-report', (_req, res) => {
+    res.json(buildFeedbackReport());
+  });
+
+  app.get('/api/monitoring/training-feedback', (_req, res) => {
+    res.json({ rows: exportTrainingFeedback() });
+  });
+
+  app.get('/api/risk/queue', async (_req, res) => {
+    const tickets = await listTickets();
+    const items = tickets
+      .map((ticket) => ticketToRiskQueueItem(ticket))
+      .sort((first, second) => second.riskScore - first.riskScore);
+
+    res.json({ items });
   });
 
   app.get('/api/integrations/catalog', (_req, res) => {
@@ -173,6 +235,14 @@ export function createApp() {
   app.post('/api/ai/builder', async (req, res, next) => {
     try {
       res.json(await buildAgentPlan(req.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/launch/test', async (req, res, next) => {
+    try {
+      res.json(await runScenarioTest(req.body));
     } catch (error) {
       next(error);
     }

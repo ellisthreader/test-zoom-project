@@ -1,0 +1,47 @@
+# Azure ML online deployment for the relayclarity-risk endpoint.
+# Create with: az ml online-deployment create -f azure/deployment.yml
+#
+# This wires together: the registered model, a conda environment built on a
+# curated AML inference base image, the scoring code directory, and the compute
+# sizing. The model:/environment: versions are placeholders that
+# register_and_deploy.sh overrides with the freshly registered versions via
+# --set, so they stay in sync with what was just created.
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
+name: blue
+endpoint_name: relayclarity-risk
+
+# Registered model (name:version). register_and_deploy.sh sets the version.
+model: azureml:risk-scoring-logreg:1
+
+# Conda env layered on a curated AML inference base image.
+environment:
+  conda_file: environment.yml
+  image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu22.04:latest
+
+# Scoring code. NOTE: for AML to import ml/infer.py + ml/features.py, the ml/
+# package must be reachable from this code dir. register_and_deploy.sh stages a
+# copy of ../ml into ./_staged so score.py finds it via its ml/ candidate path.
+code_configuration:
+  code: .
+  scoring_script: score.py
+
+instance_type: Standard_DS2_v2
+instance_count: 1
+
+request_settings:
+  request_timeout_ms: 10000
+  max_concurrent_requests_per_instance: 4
+
+liveness_probe:
+  initial_delay: 10
+  period: 10
+  timeout: 2
+  failure_threshold: 3
+  success_threshold: 1
+
+readiness_probe:
+  initial_delay: 10
+  period: 10
+  timeout: 5
+  failure_threshold: 30
+  success_threshold: 1

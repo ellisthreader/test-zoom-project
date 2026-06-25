@@ -1,0 +1,15 @@
+# Conda environment for the Azure ML inference container.
+# Referenced by azure/deployment.yml. Kept minimal: ml/infer.py + ml/features.py
+# use only the Python stdlib, and the azureml inference server provides the HTTP
+# layer. numpy/scikit-learn are pinned for parity with the training environment
+# and forward-compat with richer model formats.
+name: relayclarity-risk-scoring
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy>=1.24
+  - scikit-learn>=1.3
+  - pip
+  - pip:
+      - azureml-inference-server-http>=1.0

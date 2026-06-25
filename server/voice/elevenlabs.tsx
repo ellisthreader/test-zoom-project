@@ -8,6 +8,7 @@ type SynthesizeSpeechInput = {
   similarityBoost?: number;
   style?: number;
   speed?: number;
+  useSpeakerBoost?: boolean;
   mock?: boolean;
 };
 
@@ -19,6 +20,7 @@ export async function synthesizeSpeech({
   similarityBoost = 0.75,
   style = 0.1,
   speed = 1,
+  useSpeakerBoost = true,
   mock = false,
 }: SynthesizeSpeechInput) {
   if (!text) throw new Error('text is required');
@@ -50,7 +52,7 @@ export async function synthesizeSpeech({
         similarity_boost: similarityBoost,
         style,
         speed,
-        use_speaker_boost: true,
+        use_speaker_boost: useSpeakerBoost,
       },
     }),
   });

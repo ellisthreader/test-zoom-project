@@ -1,0 +1,140 @@
+{
+  "modelVersion": "risk-scoring-logreg-1.0.0",
+  "testRows": 1200,
+  "metrics": {
+    "accuracy": 0.8042,
+    "macroF1": 0.7692,
+    "highRecall": 0.8541,
+    "perClass": {
+      "low": {
+        "precision": 0.625,
+        "recall": 0.8271,
+        "f1": 0.712,
+        "support": 133
+      },
+      "medium": {
+        "precision": 0.7052,
+        "recall": 0.7139,
+        "f1": 0.7095,
+        "support": 402
+      },
+      "high": {
+        "precision": 0.9206,
+        "recall": 0.8541,
+        "f1": 0.8861,
+        "support": 665
+      }
+    },
+    "confusionMatrix": {
+      "low": {
+        "low": 110,
+        "medium": 23,
+        "high": 0
+      },
+      "medium": {
+        "low": 66,
+        "medium": 287,
+        "high": 49
+      },
+      "high": {
+        "low": 0,
+        "medium": 97,
+        "high": 568
+      }
+    }
+  },
+  "calibration": {
+    "expectedCalibrationError": 0.0167,
+    "reliability": [
+      {
+        "meanConfidence": 0.4992,
+        "accuracy": 0.75,
+        "count": 4
+      },
+      {
+        "meanConfidence": 0.5572,
+        "accuracy": 0.5109,
+        "count": 137
+      },
+      {
+        "meanConfidence": 0.6537,
+        "accuracy": 0.6125,
+        "count": 160
+      },
+      {
+        "meanConfidence": 0.7579,
+        "accuracy": 0.7376,
+        "count": 221
+      },
+      {
+        "meanConfidence": 0.8363,
+        "accuracy": 0.8293,
+        "count": 205
+      },
+      {
+        "meanConfidence": 0.9749,
+        "accuracy": 0.9746,
+        "count": 473
+      }
+    ]
+  },
+  "performance": {
+    "meanLatencyMs": 0.0232,
+    "p95LatencyMs": 0.0345,
+    "throughputPerSec": 43186.8,
+    "estimatedCostPer1kGbp": 1e-06,
+    "costNote": "Derived from mean latency at \u00a30.11/hr single-instance compute."
+  },
+  "fairness": {
+    "customerTier": {
+      "slices": {
+        "standard": 0.4734,
+        "vip": 0.6793,
+        "premium": 0.4739
+      },
+      "disparityGap": 0.2059
+    },
+    "channel": {
+      "slices": {
+        "web_chat": 0.471,
+        "voice": 0.5401,
+        "chat": 0.5021,
+        "email": 0.535,
+        "zoom_contact_center": 0.5265
+      },
+      "disparityGap": 0.0691
+    },
+    "category": {
+      "slices": {
+        "account": 0.3534,
+        "payment": 0.5143,
+        "delivery": 0.561,
+        "technical": 0.5111,
+        "security": 0.5159,
+        "general_support": 0.3553,
+        "fraud": 0.6207,
+        "policy": 0.6786,
+        "billing": 0.5597
+      },
+      "disparityGap": 0.3252
+    }
+  },
+  "baselineDistribution": {
+    "low": 0.0969,
+    "medium": 0.3383,
+    "high": 0.5648
+  },
+  "deploymentGate": {
+    "thresholds": {
+      "accuracy": 0.7,
+      "high_recall": 0.7,
+      "macro_f1": 0.65
+    },
+    "results": {
+      "accuracy": true,
+      "highRecall": true,
+      "macroF1": true
+    },
+    "passed": true
+  }
+}

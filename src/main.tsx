@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type MotionValue } from "framer-motion";
 import { businessCategorySeeds } from "./business-category-data";
+import MagicBento from "./MagicBento";
 import {
   buildBusinessTaxonomy,
   formatBusinessSuggestionLabel,
@@ -19,6 +21,12 @@ import launchPhotoTestUrl from "../assets/launch-photo-test.png";
 import launchPhotoControlUrl from "../assets/launch-photo-control.png";
 import launchPhotoObserveUrl from "../assets/launch-photo-observe.png";
 import launchPhotoLaunchUrl from "../assets/launch-photo-launch.png";
+import voiceAgentGeorgeUrl from "../assets/voice-agent-george.png";
+import voiceAgentCharlieUrl from "../assets/voice-agent-charlie.png";
+import voiceAgentEricUrl from "../assets/voice-agent-eric.png";
+import voiceAgentSarahUrl from "../assets/voice-agent-sarah.png";
+import voiceAgentAliceUrl from "../assets/voice-agent-alice.png";
+import voiceAgentMatildaUrl from "../assets/voice-agent-matilda.png";
 import customerBearLaneUrl from "../assets/customer-bear-lane.jpg";
 import customerClearDbsUrl from "../assets/customer-cleardbs.jpg";
 import customerHarbourFinancialUrl from "../assets/customer-harbour-financial.jpg";
@@ -41,6 +49,29 @@ type Scenario = {
 
 type TestRunState = "idle" | "running" | "complete";
 
+type TestScenarioResult = {
+  score: number;
+  passed: boolean;
+  result: string;
+  checks: Array<{
+    name: string;
+    passed: boolean;
+  }>;
+};
+
+type LaunchTestApiResult = TestScenarioResult & {
+  mode: "real" | "simulated";
+  metrics?: {
+    groundedness: number;
+    taskProgress: number;
+    faithfulness: number;
+    conciseness: number;
+    escalationHandled: boolean;
+    avgLatencyMs: number;
+    turns: number;
+  };
+};
+
 type Connector = {
   key: string;
   name: string;
@@ -48,7 +79,7 @@ type Connector = {
   provider: string;
   logoUrl: string;
   connected: boolean;
-  connectionMode?: "oauth" | "sandbox" | "demo";
+  connectionMode?: "oauth" | "sandbox";
   connectionMessage?: string;
   scopes?: string[];
   testStatus?: string;
@@ -76,9 +107,10 @@ type IntegrationConnectResult = {
   logoUrl: string;
   status: "connected" | "oauth_redirect";
   authUrl?: string;
-  mode: "oauth" | "sandbox" | "demo";
+  mode: "oauth" | "sandbox";
   scopes: string[];
   message: string;
+  connectedAt?: string;
 };
 
 type IntegrationCheck = {
@@ -105,6 +137,8 @@ type VoicePreset = {
   role: string;
   tone: string;
   voiceId: string;
+  imageUrl: string;
+  previewAudioUrl: string;
   sample: string;
 };
 
@@ -115,6 +149,19 @@ type SpeechPayload = {
   audioBase64?: string;
   voiceId?: string;
   message?: string;
+};
+
+const SILENT_AUDIO_URL = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAESsAAABAAgAZGF0YQQAAAAAAA==";
+const VOICE_GENERATION_LIMIT = 5;
+
+const intelligenceReveal = {
+  hidden: { opacity: 0, y: 22, filter: "blur(8px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] as const },
+  },
 };
 
 type AuthUser = {
@@ -128,6 +175,7 @@ type AuthUser = {
 type AuthPayload = {
   user: AuthUser | null;
   googleAuthAvailable: boolean;
+  isNewUser?: boolean;
 };
 
 type AuthStatus = "checking" | "signed-out" | "signed-in";
@@ -140,6 +188,64 @@ type Project = {
   websiteUrl?: string;
   phoneContactNumber?: string;
   launchReport?: string;
+};
+
+type MetricCallRecord = {
+  id: string;
+  hourLabel: string;
+  time: string;
+  callerName: string;
+  phone: string;
+  intent: string;
+  outcome: "Resolved" | "Handoff" | "Review" | "Abandoned";
+  issueCategory: "Billing" | "Booking" | "Policy" | "Knowledge" | "Technical" | "General";
+  duration: string;
+  confidence: number;
+  summary: string;
+  aiAction: string;
+  wentWrong: string;
+  transcript: { speaker: "Customer" | "AI" | "System"; text: string }[];
+};
+
+type RiskLevel = "high" | "medium" | "low";
+
+type RiskQueueItem = {
+  id: string;
+  sourceType: "ticket" | "call" | "transaction" | "account_security";
+  title: string;
+  customer: string;
+  summary: string;
+  riskLevel: RiskLevel;
+  riskScore: number;
+  confidence: number;
+  due: string;
+  owner: string;
+  source: string;
+  reasons: string[];
+  signals: { label: string; value: string }[];
+  nextAction: string;
+  transcript?: MetricCallRecord["transcript"];
+};
+
+type RiskQueueApiState = {
+  status: "idle" | "loading" | "ready" | "fallback";
+  items: RiskQueueItem[];
+  calls: MetricCallRecord[];
+  error?: string;
+};
+
+type LiveRiskConversation = {
+  id: string;
+  channel: "chat" | "phone";
+  customer: string;
+  title: string;
+  detail: string;
+  riskLevel: RiskLevel;
+  riskScore: number;
+  confidence: number;
+  status: string;
+  action: string;
+  transcript?: MetricCallRecord["transcript"];
 };
 
 type LiveWorkspaceMetrics = {
@@ -225,6 +331,586 @@ function createInitialLiveMetrics(project: Project): LiveWorkspaceMetrics {
   };
 }
 
+function createMetricCallRecords(project: Project, metrics: LiveWorkspaceMetrics, hourLabels: string[]): MetricCallRecord[] {
+  const seed = projectSeed(project.id);
+  const callers = [
+    { name: "Amelia Carter", phone: "+44 7700 900111" },
+    { name: "Noah Patel", phone: "+44 7700 900222" },
+    { name: "Grace Morgan", phone: "+44 7700 900318" },
+    { name: "Ethan Lewis", phone: "+44 7700 900427" },
+    { name: "Maya Shah", phone: "+44 7700 900536" },
+    { name: "Oliver Reed", phone: "+44 7700 900645" }
+  ];
+  const intents = [
+    { intent: "Invoice copy requested", category: "Billing" as const, customer: "Can you send me a copy of the latest invoice?", ai: "I found the account and can send the invoice to the email on file." },
+    { intent: "Appointment change", category: "Booking" as const, customer: "I need to move my booking to later this week.", ai: "I can collect your preferred time and send the change request to the team." },
+    { intent: "Refund status", category: "Policy" as const, customer: "Where is my refund and can you guarantee it today?", ai: "I can check the policy, but I cannot promise a refund date without staff review." },
+    { intent: "Missing delivery", category: "Knowledge" as const, customer: "My express delivery has not arrived.", ai: "I need the order number and postcode so I can create a high-priority follow-up." },
+    { intent: "Account lookup failed", category: "Technical" as const, customer: "The system never recognizes my account number.", ai: "I am having trouble matching that account and will route this with your details." },
+    { intent: "Opening hours", category: "General" as const, customer: "Are you open tomorrow morning?", ai: "I can answer from the approved opening-hours source." }
+  ];
+
+  return hourLabels.flatMap((hourLabel, hourIndex) => {
+    const count = metrics.hourlyVolume[hourIndex] || 0;
+
+    return Array.from({ length: count }, (_, callIndex) => {
+      const intent = intents[(seed + hourIndex + callIndex) % intents.length];
+      const caller = callers[(seed + callIndex + hourIndex * 2) % callers.length];
+      const minute = String((callIndex * 7 + seed + hourIndex * 3) % 60).padStart(2, "0");
+      const baseOutcome = (seed + hourIndex + callIndex) % 11 === 0
+        ? "Review"
+        : intent.category === "Policy" || intent.category === "Technical" || (seed + callIndex) % 9 === 0
+          ? "Handoff"
+          : (seed + callIndex) % 17 === 0
+            ? "Abandoned"
+            : "Resolved";
+      const outcome = baseOutcome as MetricCallRecord["outcome"];
+      const confidence = clampNumber(92 - (outcome === "Handoff" ? 10 : outcome === "Review" ? 15 : outcome === "Abandoned" ? 22 : 0) + ((seed + callIndex) % 5), 52, 98);
+      const wentWrong = outcome === "Resolved"
+        ? "Nothing material. The AI answered from approved context and completed the wrap-up."
+        : outcome === "Handoff"
+          ? intent.category === "Technical"
+            ? "CRM lookup did not confidently match the caller, so the AI handed off with context."
+            : "The request needed staff approval or a policy-safe human decision."
+          : outcome === "Review"
+            ? "Low answer confidence. The response should be reviewed before reuse."
+            : "Caller dropped before identity and intent were complete.";
+
+      return {
+        id: `${project.id}-${hourLabel}-${callIndex}`,
+        hourLabel,
+        time: hourLabel === "Now" ? `13:${minute}` : `${hourLabel.slice(0, 2)}:${minute}`,
+        callerName: caller.name,
+        phone: caller.phone,
+        intent: intent.intent,
+        outcome,
+        issueCategory: intent.category,
+        duration: `${2 + ((seed + callIndex) % 5)}m ${String(8 + ((seed + hourIndex + callIndex) % 50)).padStart(2, "0")}s`,
+        confidence,
+        summary: outcome === "Resolved"
+          ? `AI handled ${intent.intent.toLowerCase()} and completed the customer response.`
+          : `AI identified ${intent.intent.toLowerCase()} and preserved context for follow-up.`,
+        aiAction: outcome === "Resolved"
+          ? "Answered customer, updated notes, and closed the interaction."
+          : outcome === "Abandoned"
+            ? "Captured partial transcript and marked the call incomplete."
+            : "Prepared handoff summary, reason, and suggested owner.",
+        wentWrong,
+        transcript: [
+          { speaker: "Customer", text: intent.customer },
+          { speaker: "AI", text: intent.ai },
+          {
+            speaker: outcome === "Resolved" ? "AI" : "System",
+            text: outcome === "Resolved"
+              ? "I have completed that for you and added a note to the account."
+              : outcome === "Abandoned"
+                ? "Call ended before the AI could complete verification."
+                : "Conversation routed for human review with transcript and customer context."
+          }
+        ]
+      };
+    });
+  });
+}
+
+function createRiskQueueItems(project: Project, metrics: LiveWorkspaceMetrics, calls: MetricCallRecord[]): RiskQueueItem[] {
+  const reviewCalls = calls
+    .filter((call) => call.outcome !== "Resolved" || call.confidence < 82)
+    .slice(0, 4)
+    .map((call, index): RiskQueueItem => {
+      const isHigh = call.outcome === "Handoff" && (call.issueCategory === "Billing" || call.issueCategory === "Policy");
+      const isMedium = call.outcome === "Review" || call.confidence < 82;
+      const riskLevel: RiskLevel = isHigh ? "high" : isMedium ? "medium" : "low";
+      const riskScore = clampNumber(
+        Math.round(58 + (call.outcome === "Handoff" ? 18 : 8) + (100 - call.confidence) * 0.5 + (call.issueCategory === "Billing" ? 8 : 0)),
+        35,
+        96
+      );
+
+      return {
+        id: `risk-call-${call.id}`,
+        sourceType: call.outcome === "Handoff" ? "ticket" : "call",
+        title: call.intent,
+        customer: call.callerName,
+        summary: call.summary,
+        riskLevel,
+        riskScore,
+        confidence: call.confidence,
+        due: index === 0 ? "Due now" : index === 1 ? "Within 30 min" : "Today",
+        owner: call.issueCategory === "Billing" ? "Finance support" : call.issueCategory === "Policy" ? "Policy owner" : "Support lead",
+        source: `${call.outcome} · ${call.issueCategory}`,
+        reasons: [
+          call.outcome === "Handoff" ? "Human handoff required" : "Review outcome",
+          call.confidence < 84 ? "Low confidence answer" : "Transcript needs owner check",
+          call.issueCategory === "Billing" ? "Payment or billing topic" : `${call.issueCategory} workflow`,
+        ],
+        signals: [
+          { label: "Channel", value: "Zoom call" },
+          { label: "Confidence", value: `${call.confidence}%` },
+          { label: "Duration", value: call.duration },
+        ],
+        nextAction: call.outcome === "Handoff" ? "Assign owner and contact customer" : "Review transcript and confirm next step",
+        transcript: call.transcript,
+      };
+    });
+
+  const seed = projectSeed(project.id);
+  const transactionAlerts: RiskQueueItem[] = [
+    {
+      id: `risk-transaction-${project.id}`,
+      sourceType: "transaction",
+      title: "Unusual payment pattern",
+      customer: "Harbour account ending 2841",
+      summary: "High-value overseas payment from a new device after repeated failed sign-in attempts.",
+      riskLevel: "high",
+      riskScore: clampNumber(91 + (seed % 5), 88, 97),
+      confidence: 87,
+      due: "Within 15 min",
+      owner: "Fraud analyst",
+      source: "Payments risk feed",
+      reasons: ["New device", "Unusual location", "High-value payment", "Failed-login velocity"],
+      signals: [
+        { label: "Amount band", value: "High" },
+        { label: "Device", value: "New" },
+        { label: "Location", value: "Unusual" },
+      ],
+      nextAction: "Review transaction before customer contact",
+    },
+    {
+      id: `risk-security-${project.id}`,
+      sourceType: "account_security",
+      title: "Account takeover signal",
+      customer: "Enterprise admin account",
+      summary: "Password reset, new device, and account permission changes occurred in a short window.",
+      riskLevel: metrics.sensitiveEscalations > 0 ? "high" : "medium",
+      riskScore: clampNumber(78 + metrics.sensitiveEscalations * 6, 70, 94),
+      confidence: 82,
+      due: "Within 1 hour",
+      owner: "Security operations",
+      source: "Identity risk feed",
+      reasons: ["Password reset", "Permission change", "New device", "Sensitive account"],
+      signals: [
+        { label: "Session", value: "New device" },
+        { label: "Permissions", value: "Changed" },
+        { label: "Review", value: "Manual" },
+      ],
+      nextAction: "Validate identity and check recent account activity",
+    },
+  ];
+
+  return [...transactionAlerts, ...reviewCalls]
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, 7);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readString(record: Record<string, unknown>, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+
+  return fallback;
+}
+
+function readNumber(record: Record<string, unknown>, keys: string[], fallback: number) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+      return Number(value);
+    }
+  }
+
+  return fallback;
+}
+
+function readStringList(record: Record<string, unknown>, keys: string[], fallback: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (Array.isArray(value)) {
+      const strings = value
+        .map((item) => typeof item === "string" ? item.trim() : isRecord(item) ? readString(item, ["label", "reason", "name", "value"]) : "")
+        .filter(Boolean);
+
+      if (strings.length) {
+        return strings;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function readArrayFromPayload(payload: unknown, keys: string[]) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!isRecord(payload)) {
+    return [];
+  }
+
+  for (const key of keys) {
+    const value = payload[key];
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return [];
+}
+
+function normalizeRiskLevel(value: string, score: number): RiskLevel {
+  const normalized = value.toLowerCase();
+
+  if (normalized === "high" || normalized === "critical" || score >= 80) {
+    return "high";
+  }
+
+  if (normalized === "medium" || normalized === "med" || score >= 55) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function normalizeSourceType(value: string): RiskQueueItem["sourceType"] {
+  const normalized = value.toLowerCase().replace(/[-\s]/g, "_");
+
+  if (normalized === "transaction" || normalized === "payment" || normalized === "payments") {
+    return "transaction";
+  }
+
+  if (normalized === "account_security" || normalized === "security" || normalized === "identity") {
+    return "account_security";
+  }
+
+  if (normalized === "ticket" || normalized === "case") {
+    return "ticket";
+  }
+
+  return "call";
+}
+
+function normalizeOutcome(value: string): MetricCallRecord["outcome"] {
+  const normalized = value.toLowerCase();
+
+  if (normalized.includes("handoff") || normalized.includes("escalat") || normalized.includes("transfer")) {
+    return "Handoff";
+  }
+
+  if (normalized.includes("review") || normalized.includes("flag")) {
+    return "Review";
+  }
+
+  if (normalized.includes("abandon") || normalized.includes("drop") || normalized.includes("incomplete")) {
+    return "Abandoned";
+  }
+
+  return "Resolved";
+}
+
+function normalizeIssueCategory(value: string): MetricCallRecord["issueCategory"] {
+  const normalized = value.toLowerCase();
+
+  if (normalized.includes("bill") || normalized.includes("payment") || normalized.includes("invoice")) return "Billing";
+  if (normalized.includes("book") || normalized.includes("appoint") || normalized.includes("schedul")) return "Booking";
+  if (normalized.includes("policy") || normalized.includes("refund") || normalized.includes("legal")) return "Policy";
+  if (normalized.includes("knowledge") || normalized.includes("answer") || normalized.includes("source")) return "Knowledge";
+  if (normalized.includes("tech") || normalized.includes("system") || normalized.includes("lookup")) return "Technical";
+
+  return "General";
+}
+
+function normalizeTranscript(value: unknown): MetricCallRecord["transcript"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((turn) => {
+      if (!isRecord(turn)) {
+        return null;
+      }
+
+      const speaker = readString(turn, ["speaker", "role", "from"], "System").toLowerCase();
+      const text = readString(turn, ["text", "content", "message", "utterance"]);
+
+      if (!text) {
+        return null;
+      }
+
+      return {
+        speaker: speaker.includes("customer") || speaker.includes("caller") || speaker === "user"
+          ? "Customer" as const
+          : speaker.includes("ai") || speaker.includes("agent") || speaker.includes("assistant")
+            ? "AI" as const
+            : "System" as const,
+        text
+      };
+    })
+    .filter((turn): turn is MetricCallRecord["transcript"][number] => Boolean(turn));
+}
+
+function normalizeMetricCallRecord(raw: unknown, index: number, hourLabels: string[]): MetricCallRecord | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+
+  const fallbackHour = hourLabels[index % hourLabels.length] || "Now";
+  const outcome = normalizeOutcome(readString(raw, ["outcome", "status", "disposition"], "Resolved"));
+  const issueCategory = normalizeIssueCategory(readString(raw, ["issueCategory", "issue_category", "category", "reason", "intent"], "General"));
+  const confidence = clampNumber(Math.round(readNumber(raw, ["confidence", "confidenceScore", "confidence_score"], 86)), 0, 100);
+  const transcript = normalizeTranscript(raw.transcript);
+  const intent = readString(raw, ["intent", "title", "topic", "summary"], "Customer call");
+  const hourLabel = readString(raw, ["hourLabel", "hour_label", "hour"], fallbackHour);
+
+  return {
+    id: readString(raw, ["id", "callId", "call_id", "conversationId", "conversation_id"], `api-call-${index}`),
+    hourLabel,
+    time: readString(raw, ["time", "startedAt", "started_at", "timestamp"], hourLabel),
+    callerName: readString(raw, ["callerName", "caller_name", "customer", "customerName", "customer_name", "name"], "Customer"),
+    phone: readString(raw, ["phone", "phoneNumber", "phone_number", "ani"], "Unknown"),
+    intent,
+    outcome,
+    issueCategory,
+    duration: readString(raw, ["duration", "durationLabel", "duration_label"], "Unknown"),
+    confidence,
+    summary: readString(raw, ["summary", "description"], `${intent} ended with ${outcome.toLowerCase()} outcome.`),
+    aiAction: readString(raw, ["aiAction", "ai_action", "action", "nextAction", "next_action"], outcome === "Resolved" ? "Answered from approved context." : "Prepared handoff context."),
+    wentWrong: readString(raw, ["wentWrong", "went_wrong", "failureReason", "failure_reason", "reviewReason", "review_reason"], outcome === "Resolved" ? "Nothing material." : "Needs staff review."),
+    transcript
+  };
+}
+
+function normalizeRiskSignals(raw: unknown, fallback: RiskQueueItem["signals"]) {
+  if (Array.isArray(raw)) {
+    const signals = raw
+      .map((signal) => {
+        if (isRecord(signal)) {
+          const label = readString(signal, ["label", "name", "key"]);
+          const value = readString(signal, ["value", "detail", "score"]);
+
+          return label && value ? { label, value } : null;
+        }
+
+        return typeof signal === "string" && signal.trim()
+          ? { label: "Signal", value: signal.trim() }
+          : null;
+      })
+      .filter((signal): signal is RiskQueueItem["signals"][number] => Boolean(signal));
+
+    if (signals.length) {
+      return signals;
+    }
+  }
+
+  if (isRecord(raw)) {
+    const signals = Object.entries(raw)
+      .map(([label, value]) => ({ label, value: typeof value === "string" || typeof value === "number" ? String(value) : "" }))
+      .filter((signal) => signal.value);
+
+    if (signals.length) {
+      return signals;
+    }
+  }
+
+  return fallback;
+}
+
+function normalizeRiskQueueItem(raw: unknown, index: number, callsById: Map<string, MetricCallRecord>): RiskQueueItem | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+
+  const linkedCallId = readString(raw, ["callId", "call_id", "sourceId", "source_id", "conversationId", "conversation_id"]);
+  const linkedCall = linkedCallId ? callsById.get(linkedCallId) : undefined;
+  const embeddedCall = normalizeMetricCallRecord(raw.call || raw.conversation, index, ["Now"]);
+  const call = linkedCall || embeddedCall;
+  const riskScore = clampNumber(Math.round(readNumber(raw, ["riskScore", "risk_score", "score", "mlScore", "ml_score", "priorityScore", "priority_score"], call ? 70 + (100 - call.confidence) * 0.2 : 72)), 0, 100);
+  const riskLevel = normalizeRiskLevel(readString(raw, ["riskLevel", "risk_level", "level", "priority"]), riskScore);
+  const sourceType = normalizeSourceType(readString(raw, ["sourceType", "source_type", "type", "sourceKind", "source_kind"], call ? "call" : "ticket"));
+  const title = readString(raw, ["title", "intent", "name"], call?.intent || "Risk queue item");
+  const customer = readString(raw, ["customer", "customerName", "customer_name", "callerName", "caller_name"], call?.callerName || "Customer");
+  const confidence = clampNumber(Math.round(readNumber(raw, ["confidence", "confidenceScore", "confidence_score", "modelConfidence", "model_confidence"], call?.confidence || 80)), 0, 100);
+
+  return {
+    id: readString(raw, ["id", "riskId", "risk_id"], `api-risk-${index}`),
+    sourceType,
+    title,
+    customer,
+    summary: readString(raw, ["summary", "description", "explanation"], call?.summary || "Backend risk model flagged this item for review."),
+    riskLevel,
+    riskScore,
+    confidence,
+    due: readString(raw, ["due", "dueAt", "due_at", "sla", "slaLabel", "sla_label"], riskLevel === "high" ? "Due now" : "Today"),
+    owner: readString(raw, ["owner", "assignee", "team"], riskLevel === "high" ? "Risk analyst" : "Support lead"),
+    source: readString(raw, ["source", "sourceLabel", "source_label"], call ? `${call.outcome} · ${call.issueCategory}` : "Risk model"),
+    reasons: readStringList(raw, ["reasons", "reasonCodes", "reason_codes", "explanations"], call ? [call.wentWrong] : ["Model score exceeded review threshold"]),
+    signals: normalizeRiskSignals(raw.signals, [
+      { label: "Source", value: sourceType.replace("_", " ") },
+      { label: "Confidence", value: `${confidence}%` }
+    ]),
+    nextAction: readString(raw, ["nextAction", "next_action", "recommendedAction", "recommended_action"], riskLevel === "high" ? "Assign owner and review now" : "Review and confirm next step"),
+    transcript: normalizeTranscript(raw.transcript).length ? normalizeTranscript(raw.transcript) : call?.transcript
+  };
+}
+
+function normalizeRiskQueuePayload(payload: unknown, fallbackCalls: MetricCallRecord[]) {
+  const rawCalls = Array.isArray(payload)
+    ? []
+    : readArrayFromPayload(payload, ["calls", "callRecords", "call_records", "metricCalls", "metric_calls", "conversations"]);
+  const calls = rawCalls
+    .map((call, index) => normalizeMetricCallRecord(call, index, ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "Now"]))
+    .filter((call): call is MetricCallRecord => Boolean(call));
+  const callsById = new Map([...fallbackCalls, ...calls].map((call) => [call.id, call]));
+  const rawItems = Array.isArray(payload)
+    ? payload
+    : readArrayFromPayload(payload, ["items", "queue", "results", "riskQueue", "risk_queue", "alerts"]);
+  const items = rawItems
+    .map((item, index) => normalizeRiskQueueItem(item, index, callsById))
+    .filter((item): item is RiskQueueItem => Boolean(item))
+    .sort((a, b) => b.riskScore - a.riskScore);
+
+  return { items, calls };
+}
+
+function parseMetricDurationSeconds(duration: string) {
+  const minutes = duration.match(/(\d+(?:\.\d+)?)\s*m/i);
+  const seconds = duration.match(/(\d+(?:\.\d+)?)\s*s/i);
+
+  if (minutes || seconds) {
+    return Math.round((minutes ? Number(minutes[1]) * 60 : 0) + (seconds ? Number(seconds[1]) : 0));
+  }
+
+  const numeric = Number(duration);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function formatMetricDuration(seconds: number) {
+  if (!seconds) {
+    return "Unknown";
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+
+  return minutes ? `${minutes}m ${String(remainder).padStart(2, "0")}s` : `${remainder}s`;
+}
+
+function formatMetricCallTime(time: string) {
+  const parsed = new Date(time);
+
+  if (!Number.isNaN(parsed.getTime()) && time.includes("T")) {
+    return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  return time;
+}
+
+function initialsForName(name: string) {
+  const parts = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return (parts.length ? parts.slice(0, 2).map((part) => part[0]).join("") : "AI").toUpperCase();
+}
+
+function avatarForName(name: string) {
+  const avatarUrls = [
+    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=96&h=96&q=80",
+    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=96&h=96&q=80",
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=96&h=96&q=80",
+    "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=96&h=96&q=80",
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=96&h=96&q=80"
+  ];
+  const seed = [...name].reduce((total, character) => total + character.charCodeAt(0), 0);
+
+  if (seed % 3 === 0) {
+    return avatarUrls[seed % avatarUrls.length];
+  }
+
+  return "";
+}
+
+function operationStatusLabel(status: string) {
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("handoff")) return "Needs agent";
+  if (normalized.includes("review") || normalized.includes("watch")) return "Review";
+  if (normalized.includes("no handoff")) return "AI active";
+
+  return status || "AI active";
+}
+
+function priorityLabel(level: RiskLevel) {
+  if (level === "high") return "Urgent";
+  if (level === "medium") return "Watch";
+  return "Normal";
+}
+
+function conversationFromRiskItem(item: RiskQueueItem, channel: LiveRiskConversation["channel"]): LiveRiskConversation {
+  return {
+    id: `${channel}-${item.id}`,
+    channel,
+    customer: item.customer,
+    title: item.title,
+    detail: item.summary,
+    riskLevel: item.riskLevel,
+    riskScore: item.riskScore,
+    confidence: item.confidence,
+    status: item.riskLevel === "high" ? "Needs agent" : item.riskLevel === "medium" ? "Review" : "AI active",
+    action: item.nextAction,
+    transcript: item.transcript
+  };
+}
+
+function conversationFromCall(call: MetricCallRecord, index: number, channel: LiveRiskConversation["channel"] = "phone"): LiveRiskConversation {
+  const riskScore = clampNumber(
+    Math.round(
+      36 +
+        (call.outcome === "Handoff" ? 34 : call.outcome === "Review" ? 20 : call.outcome === "Abandoned" ? 24 : 0) +
+        (100 - call.confidence) * 0.32 +
+        (call.issueCategory === "Policy" || call.issueCategory === "Billing" ? 8 : 0)
+    ),
+    18,
+    96
+  );
+  const riskLevel: RiskLevel = riskScore >= 76 ? "high" : riskScore >= 54 ? "medium" : "low";
+
+  return {
+    id: `${channel}-${call.id}-${index}`,
+    channel,
+    customer: call.callerName,
+    title: call.intent,
+    detail: call.summary,
+    riskLevel,
+    riskScore,
+    confidence: call.confidence,
+    status: call.outcome === "Handoff" ? "Needs agent" : call.outcome === "Review" ? "Review" : "AI active",
+    action: call.outcome === "Resolved" ? "Continue AI handling" : call.aiAction,
+    transcript: call.transcript
+  };
+}
+
 function advanceLiveMetrics(previous: LiveWorkspaceMetrics): LiveWorkspaceMetrics {
   const nextTick = previous.tick + 1;
   const newCall = nextTick % 4 === 0 ? 1 : 0;
@@ -275,6 +961,103 @@ type GoalOption = {
   categoryDetail?: string;
 };
 
+function simpleCapabilityBullets(goal?: GoalOption) {
+  const fallback = [
+    { title: "Start small", detail: "Choose the first customer moments this agent should handle." },
+    { title: "Keep answers clear", detail: "Ground responses in approved business information." },
+    { title: "Escalate when needed", detail: "Move complex or sensitive requests to the right person." }
+  ];
+
+  if (!goal) {
+    return fallback;
+  }
+
+  const bulletMap: Record<string, Array<{ title: string; detail: string }>> = {
+    "Virtual Agent": [
+      { title: "Answers common questions", detail: "Handles repeat customer requests without making people wait." },
+      { title: "Works in voice or chat", detail: "Keeps the same approved response style across channels." },
+      { title: "Hands off when needed", detail: "Transfers the conversation with context when a person should step in." }
+    ],
+    "Intent Detection": [
+      { title: "Finds the customer need", detail: "Understands whether the customer wants help, a change, a quote, or escalation." },
+      { title: "Routes the conversation", detail: "Sends each request toward the right answer, workflow, or team." },
+      { title: "Reduces wrong turns", detail: "Avoids forcing customers through the wrong script." }
+    ],
+    "Knowledge Answers": [
+      { title: "Uses approved content", detail: "Pulls from policies, FAQs, service details, and business rules." },
+      { title: "Keeps answers consistent", detail: "Gives customers the same clear information every time." },
+      { title: "Avoids guessing", detail: "Escalates when the answer is missing or confidence is low." }
+    ],
+    "Eligibility Check": [
+      { title: "Asks qualifying questions", detail: "Collects the details needed before giving help or routing." },
+      { title: "Checks basic fit", detail: "Confirms whether the request matches your rules and services." },
+      { title: "Routes complex cases", detail: "Moves edge cases to staff before the customer gets stuck." }
+    ],
+    "Task Automation": [
+      { title: "Completes repeat tasks", detail: "Handles simple structured work after the customer confirms details." },
+      { title: "Saves team time", detail: "Removes low-value admin from busy support and sales teams." },
+      { title: "Keeps simple work moving", detail: "Finishes routine requests without waiting for a manual follow-up." }
+    ],
+    "System Workflows": [
+      { title: "Uses connected tools", detail: "Reads and updates the systems your team already depends on." },
+      { title: "Finds customer context", detail: "Looks up account, booking, order, or case details during the conversation." },
+      { title: "Updates the right systems", detail: "Keeps records clean instead of leaving notes in chat history." }
+    ],
+    "Ticket Creation": [
+      { title: "Captures the issue", detail: "Turns the customer problem into a structured support record." },
+      { title: "Adds customer details", detail: "Includes contact information, urgency, summary, and useful context." },
+      { title: "Creates a clean record", detail: "Gives the team a ready-to-work ticket instead of a raw transcript." }
+    ],
+    "Follow-Up Scheduling": [
+      { title: "Books next steps", detail: "Schedules callbacks, reminders, or tasks after the request is captured." },
+      { title: "Sets reminders", detail: "Keeps time-sensitive follow-up from slipping through." },
+      { title: "Keeps customers updated", detail: "Confirms what happens next before the conversation ends." }
+    ],
+    "Live Agent Handoff": [
+      { title: "Transfers to a person", detail: "Moves complex or urgent conversations out of automation quickly." },
+      { title: "Includes conversation context", detail: "Shows the team what happened, what was asked, and what is needed." },
+      { title: "Protects complex moments", detail: "Keeps sensitive cases from being handled by the wrong flow." }
+    ],
+    "Priority Routing": [
+      { title: "Spots urgent needs", detail: "Recognizes high-value, at-risk, or time-sensitive requests." },
+      { title: "Moves faster cases first", detail: "Prioritizes conversations that should not sit in a normal queue." },
+      { title: "Sends customers to the right team", detail: "Routes by urgency, topic, account type, or business rules." }
+    ],
+    "Sensitive Topic Guardrails": [
+      { title: "Recognizes risk", detail: "Detects complaints, payments, legal topics, policy exceptions, and other sensitive moments." },
+      { title: "Stops unsafe answers", detail: "Prevents the agent from inventing promises or handling restricted requests." },
+      { title: "Escalates sensitive cases", detail: "Brings in a person with the right context before risk builds." }
+    ],
+    "Fallback Handling": [
+      { title: "Catches unclear requests", detail: "Detects when the customer intent or required answer is not clear enough." },
+      { title: "Avoids bad answers", detail: "Stops low-confidence replies before they create more work." },
+      { title: "Gets human help", detail: "Moves the conversation to staff with a concise summary." }
+    ],
+    "AI Expert Assist": [
+      { title: "Suggests next actions", detail: "Gives staff useful prompts while they handle the customer." },
+      { title: "Shows useful context", detail: "Surfaces relevant account, policy, and knowledge-base details." },
+      { title: "Supports your team live", detail: "Helps people respond faster without replacing their judgment." }
+    ],
+    "Auto Wrap-Up": [
+      { title: "Writes summaries", detail: "Creates a clean record of what happened in the conversation." },
+      { title: "Adds dispositions", detail: "Labels outcomes so reporting and follow-up are easier." },
+      { title: "Captures follow-ups", detail: "Turns promised next steps into tasks or notes." }
+    ],
+    "Quality Review": [
+      { title: "Finds weak answers", detail: "Highlights responses that need better content or safer wording." },
+      { title: "Flags missed intents", detail: "Shows where the agent misunderstood what customers wanted." },
+      { title: "Shows improvement areas", detail: "Gives managers a focused list of what to fix next." }
+    ],
+    "Coaching Insights": [
+      { title: "Finds patterns", detail: "Reveals the questions and friction points customers repeat most." },
+      { title: "Highlights training needs", detail: "Shows where staff or agent guidance should improve." },
+      { title: "Shows recurring questions", detail: "Turns live conversations into clearer coaching themes." }
+    ]
+  };
+
+  return bulletMap[goal.title] || fallback;
+}
+
 function zoomAiCapabilitiesFor(playbook: BusinessPlaybook, businessType: string): GoalOption[] {
   const businessLabel = businessType.trim() || playbook.label.toLowerCase();
   const primaryChannel = playbook.channels[0] || "Zoom Contact Center";
@@ -287,97 +1070,97 @@ function zoomAiCapabilitiesFor(playbook: BusinessPlaybook, businessType: string)
 
   return [
     {
-      category: "Resolve customer questions",
+      category: "Answers",
       categoryDetail: "Conversation skills that answer, classify, and keep support consistent.",
       title: "Virtual Agent",
       detail: `Answer ${businessLabel} conversations through ${primaryChannel} with consistent customer support.`
     },
     {
-      category: "Resolve customer questions",
+      category: "Answers",
       categoryDetail: "Conversation skills that answer, classify, and keep support consistent.",
       title: "Intent Detection",
       detail: `Classify whether callers need ${primaryGoal}, ${secondaryGoal}, or specialist support.`
     },
     {
-      category: "Resolve customer questions",
+      category: "Answers",
       categoryDetail: "Conversation skills that answer, classify, and keep support consistent.",
       title: "Knowledge Answers",
       detail: `Answer from ${knowledgeSource}, approved policies, service details, and company FAQs.`
     },
     {
-      category: "Resolve customer questions",
+      category: "Answers",
       categoryDetail: "Conversation skills that answer, classify, and keep support consistent.",
       title: "Eligibility Check",
       detail: "Ask the right qualifying questions before giving an answer or routing the customer."
     },
     {
-      category: "Take action",
+      category: "Automation",
       categoryDetail: "Operational tools that update systems and complete structured requests.",
       title: "Task Automation",
       detail: `Complete approved FAQs, structured requests, and follow-up tasks automatically.`
     },
     {
-      category: "Take action",
+      category: "Automation",
       categoryDetail: "Operational tools that update systems and complete structured requests.",
       title: "System Workflows",
       detail: `Use ${systemOfRecord}, ${ticketingSystem}, billing, and service systems during the conversation.`
     },
     {
-      category: "Take action",
+      category: "Automation",
       categoryDetail: "Operational tools that update systems and complete structured requests.",
       title: "Ticket Creation",
       detail: `Create, update, and tag ${ticketingSystem} records with the right customer context.`
     },
     {
-      category: "Take action",
+      category: "Automation",
       categoryDetail: "Operational tools that update systems and complete structured requests.",
       title: "Follow-Up Scheduling",
       detail: "Book callbacks, reminders, or next-step tasks after the customer request is captured."
     },
     {
-      category: "Escalate when needed",
+      category: "Safety",
       categoryDetail: "Human handoff for complex, sensitive, or urgent customer moments.",
       title: "Live Agent Handoff",
       detail: "Transfer complex or urgent conversations with customer context and conversation history."
     },
     {
-      category: "Escalate when needed",
+      category: "Safety",
       categoryDetail: "Human handoff for complex, sensitive, or urgent customer moments.",
       title: "Priority Routing",
       detail: "Route high-value, urgent, or at-risk customers to the right team without delay."
     },
     {
-      category: "Escalate when needed",
+      category: "Safety",
       categoryDetail: "Human handoff for complex, sensitive, or urgent customer moments.",
       title: "Sensitive Topic Guardrails",
       detail: "Escalate complaints, payments, legal issues, or policy exceptions before risk builds."
     },
     {
-      category: "Escalate when needed",
+      category: "Safety",
       categoryDetail: "Human handoff for complex, sensitive, or urgent customer moments.",
       title: "Fallback Handling",
       detail: "Move unclear requests to a human when confidence is low or the customer pushes back."
     },
     {
-      category: "Support the team",
+      category: "Team",
       categoryDetail: "Agent-side help that reduces admin and improves next actions.",
       title: "AI Expert Assist",
       detail: `Surface relevant guidance, next best actions, and ${playbook.label.toLowerCase()} context for staff.`
     },
     {
-      category: "Support the team",
+      category: "Team",
       categoryDetail: "Agent-side help that reduces admin and improves next actions.",
       title: "Auto Wrap-Up",
       detail: "Generate summaries, dispositions, notes, and follow-up actions after every contact."
     },
     {
-      category: "Support the team",
+      category: "Team",
       categoryDetail: "Agent-side help that reduces admin and improves next actions.",
       title: "Quality Review",
       detail: "Flag missed intents, weak answers, and handoff patterns that need manager review."
     },
     {
-      category: "Support the team",
+      category: "Team",
       categoryDetail: "Agent-side help that reduces admin and improves next actions.",
       title: "Coaching Insights",
       detail: "Show recurring questions, process gaps, and training themes from real conversations."
@@ -395,7 +1178,105 @@ type DemoMode = "chat" | "call";
 type ChatMessage = {
   role: "agent" | "user";
   content: string;
+  charts?: WorkspaceAssistantChart[];
 };
+
+function renderInlineChatFormatting(content: string) {
+  const tokenPattern = /(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_)/g;
+
+  return content.split(tokenPattern).filter(Boolean).map((part, partIndex) => {
+    const key = `${content}-${partIndex}`;
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={key}>{part.slice(1, -1)}</code>;
+    }
+
+    if (part.startsWith("***") && part.endsWith("***")) {
+      return <strong key={key}><em>{part.slice(3, -3)}</em></strong>;
+    }
+
+    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>;
+    }
+
+    if ((part.startsWith("*") && part.endsWith("*")) || (part.startsWith("_") && part.endsWith("_"))) {
+      return <em key={key}>{part.slice(1, -1)}</em>;
+    }
+
+    return part;
+  });
+}
+
+function renderChatMessageContent(content: string, trailingNode?: React.ReactNode) {
+  const lines = content.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let bulletItems: React.ReactNode[] = [];
+  let numberedItems: React.ReactNode[] = [];
+
+  const flushBullets = () => {
+    if (!bulletItems.length) {
+      return;
+    }
+
+    blocks.push(<ul key={`list-${blocks.length}`}>{bulletItems}</ul>);
+    bulletItems = [];
+  };
+  const flushNumberedItems = () => {
+    if (!numberedItems.length) {
+      return;
+    }
+
+    blocks.push(<ol key={`ordered-list-${blocks.length}`}>{numberedItems}</ol>);
+    numberedItems = [];
+  };
+  const flushLists = () => {
+    flushBullets();
+    flushNumberedItems();
+  };
+
+  lines.forEach((line, lineIndex) => {
+    const bulletMatch = line.match(/^\s*[-*•]\s+(.+)$/);
+    const numberedMatch = line.match(/^\s*\d+[.)]\s+(.+)$/);
+
+    if (bulletMatch) {
+      flushNumberedItems();
+      bulletItems.push(<li key={`item-${lineIndex}`}>{renderInlineChatFormatting(bulletMatch[1])}</li>);
+      return;
+    }
+
+    if (numberedMatch) {
+      flushBullets();
+      numberedItems.push(<li key={`ordered-item-${lineIndex}`}>{renderInlineChatFormatting(numberedMatch[1])}</li>);
+      return;
+    }
+
+    flushLists();
+
+    if (!line.trim()) {
+      return;
+    }
+
+    blocks.push(<p key={`paragraph-${lineIndex}`}>{renderInlineChatFormatting(line)}</p>);
+  });
+
+  flushLists();
+
+  if (trailingNode) {
+    if (blocks.length && React.isValidElement(blocks[blocks.length - 1])) {
+      const lastBlock = blocks[blocks.length - 1] as React.ReactElement<{ children?: React.ReactNode }>;
+
+      if (lastBlock.type === "p") {
+        blocks[blocks.length - 1] = React.cloneElement(lastBlock, undefined, lastBlock.props.children, trailingNode);
+      } else {
+        blocks.push(<p key="message-trailing-node">{trailingNode}</p>);
+      }
+    } else {
+      blocks.push(<p key="message-trailing-node">{trailingNode}</p>);
+    }
+  }
+
+  return blocks.length ? blocks : trailingNode ? <p>{trailingNode}</p> : null;
+}
 
 type DemoChatTurn = {
   reply: string;
@@ -410,6 +1291,18 @@ type WorkspaceAssistantChart = {
   title: string;
   kind: "bar" | "progress";
   data: { label: string; value: number; display: string; percent?: number }[];
+};
+
+type ActiveMetricFocus = {
+  tabId: string;
+  chartId: string;
+  chartTitle: string;
+  label: string;
+  value: string;
+  pointValue: number;
+  pointDisplay: string;
+  pointPercent?: number;
+  chartData: WorkspaceAssistantChart["data"];
 };
 
 type WorkspaceAssistantResponse = {
@@ -432,6 +1325,80 @@ type WorkspaceAssistantResponse = {
   };
   charts: WorkspaceAssistantChart[];
 };
+
+function buildChartPointTooltip(chart: WorkspaceAssistantChart, point: WorkspaceAssistantChart["data"][number]) {
+  const value = point.display || point.value.toLocaleString();
+
+  if (chart.kind === "bar") {
+    return `${point.label}: ${value} calls`;
+  }
+
+  return `${point.label}: ${value}${typeof point.percent === "number" ? ` (${point.percent}%)` : ""}`;
+}
+
+function WorkspaceChatCharts({
+  charts,
+  onPointClick
+}: {
+  charts: WorkspaceAssistantChart[];
+  onPointClick?: (chart: WorkspaceAssistantChart, point: WorkspaceAssistantChart["data"][number]) => void;
+}) {
+  if (!charts.length) {
+    return null;
+  }
+
+  return (
+    <div className="completed-chat-charts" aria-label="Assistant chart data">
+      {charts.map((chart) => {
+        const maxValue = Math.max(1, ...chart.data.map((point) => point.value));
+
+        return (
+          <section className={`completed-chat-chart is-${chart.kind}`} key={chart.id} aria-label={chart.title}>
+            <div className="completed-chat-chart-heading">
+              <span>{chart.title}</span>
+              <strong>{chart.data.reduce((total, point) => total + point.value, 0).toLocaleString()}</strong>
+            </div>
+            {chart.kind === "bar" ? (
+              <div className="completed-chat-bar-chart">
+                {chart.data.map((point) => (
+                  <button
+                    type="button"
+                    key={point.label}
+                    data-tooltip={buildChartPointTooltip(chart, point)}
+                    aria-label={`${buildChartPointTooltip(chart, point)}. Click to open this metric.`}
+                    onClick={() => onPointClick?.(chart, point)}
+                  >
+                    <i style={{ height: `${Math.max(18, Math.round((point.value / maxValue) * 122))}px` }}></i>
+                    <strong>{point.display || point.value}</strong>
+                    <span>{point.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="completed-chat-progress-chart">
+                {chart.data.map((point) => (
+                  <button
+                    type="button"
+                    key={point.label}
+                    data-tooltip={buildChartPointTooltip(chart, point)}
+                    aria-label={`${buildChartPointTooltip(chart, point)}. Click to open this metric.`}
+                    onClick={() => onPointClick?.(chart, point)}
+                  >
+                    <div>
+                      <span>{point.label}</span>
+                      <strong>{point.display || point.value}</strong>
+                    </div>
+                    <i><b style={{ width: `${Math.max(3, Math.min(100, point.percent ?? Math.round((point.value / maxValue) * 100)))}%` }}></b></i>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
 
 type BusinessPlaybook = {
   id: string;
@@ -465,24 +1432,24 @@ type BusinessSuggestion = BusinessMatch & {
 
 const workflow = [
   {
-    phase: "Configure",
-    title: "Tell it what your business does",
-    example: "Bookings, emergencies, FAQs, opening hours.",
-    outcome: "A tailored agent brief in seconds.",
+    phase: "Build",
+    title: "Build",
+    example: "Create the first agent with answers, rules, and handoffs.",
+    outcome: "Ready to test.",
     image: workflowConfigureCardUrl
   },
   {
-    phase: "Simulate",
-    title: "Try realistic customer questions",
-    example: "Emergency appointment, order update, new lead.",
-    outcome: "See exactly how the agent responds.",
+    phase: "Test",
+    title: "Test",
+    example: "Run the difficult calls before customers do.",
+    outcome: "Know what is safe to launch.",
     image: workflowSimulateCardUrl
   },
   {
-    phase: "Observe",
-    title: "Keep an eye on every conversation",
-    example: "Chats, calls, handoffs, and missed requests.",
-    outcome: "The important activity stays visible.",
+    phase: "Launch",
+    title: "Launch",
+    example: "Go live with checks, owners, and early-call visibility.",
+    outcome: "Production is under control.",
     image: workflowObserveCardUrl
   },
   {
@@ -553,6 +1520,246 @@ function useScrollGlowReveal(progress: MotionValue<number>, start: number, peak:
     x: useTransform(progress, [start, end], ["-135%", "135%"]),
     skewX: -18
   };
+}
+
+type WorkflowStep = (typeof workflow)[number];
+
+function WorkflowScrollLine({ steps }: { steps: string[] }) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const { scrollYProgress: trackScrollProgress } = useScroll({
+    target: trackRef,
+    offset: ["start center", "end center"]
+  });
+  const lineProgress = useTransform(trackScrollProgress, [0, 1], [0, 1]);
+
+  return (
+    <div className="workflow-scroll-line" aria-hidden="true">
+      <div className="workflow-scroll-line-track" ref={trackRef}>
+        <motion.span style={{ scaleY: lineProgress }}></motion.span>
+      </div>
+      {steps.map((step, index) => (
+        <div className="workflow-scroll-marker" style={{ top: `${12 + index * 38}%` }} key={step}>
+          <i></i>
+          <span>{String(index + 1).padStart(2, "0")}</span>
+          <strong>{step}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WorkflowPinnedImage({
+  step,
+  index,
+  progress,
+  total,
+  shouldReduceMotion
+}: {
+  step: WorkflowStep;
+  index: number;
+  progress: MotionValue<number>;
+  total: number;
+  shouldReduceMotion: boolean | null;
+}) {
+  const segment = 1 / total;
+  // Wide overlap so the outgoing and incoming images genuinely cross-fade instead of cutting.
+  const start = Math.max(0, index * segment - segment * 0.5);
+  const center = (index + 0.5) * segment;
+  const end = Math.min(1, (index + 1) * segment + segment * 0.5);
+  // Hold each image fully visible across a plateau around its center so it stays on longer.
+  const holdStart = Math.max(start, center - segment * 0.42);
+  const holdEnd = Math.min(end, center + segment * 0.42);
+  const isFirst = index === 0;
+  const isLast = index === total - 1;
+  const stops = [start, holdStart, holdEnd, end];
+
+  // The first image rests at the section top and the last at the bottom, so they stay settled there.
+  const opacityStops = isFirst ? [1, 1, 1, 0] : isLast ? [0, 1, 1, 1] : [0, 1, 1, 0];
+  const opacity = useTransform(progress, stops, opacityStops);
+  const scaleStops = isFirst ? [1, 1, 1, 1.05] : isLast ? [1.06, 1, 1, 1] : [1.06, 1, 1, 1.05];
+  const scale = useTransform(progress, stops, scaleStops);
+  // Gentle vertical drift: incoming rises into place, outgoing lifts away.
+  const yStops = isFirst ? [0, 0, 0, -34] : isLast ? [34, 0, 0, 0] : [34, 0, 0, -34];
+  const y = useTransform(progress, stops, yStops);
+
+  const sharpFilter = "blur(0px) saturate(1.05) contrast(1.02) brightness(1)";
+  const softFilter = "blur(9px) saturate(0.94) contrast(0.98) brightness(1.04)";
+  const filter = useTransform(progress, stops, [
+    isFirst ? sharpFilter : softFilter,
+    sharpFilter,
+    sharpFilter,
+    isLast ? sharpFilter : softFilter
+  ]);
+
+  return (
+    <motion.img
+      className="workflow-pinned-image"
+      src={step.image}
+      alt={`${step.phase} workflow preview`}
+      loading={index === 0 ? "eager" : "lazy"}
+      style={shouldReduceMotion ? { opacity: index === 0 ? 1 : 0 } : { opacity, scale, y, filter }}
+    />
+  );
+}
+
+function WorkflowTimelineChapter({
+  step,
+  index
+}: {
+  step: WorkflowStep;
+  index: number;
+}) {
+  const chapterRef = useRef<HTMLElement | null>(null);
+  const shouldReduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: chapterRef,
+    offset: ["start 78%", "end 22%"]
+  });
+  const opacity = useTransform(scrollYProgress, [0, 0.22, 0.72, 1], [0.2, 1, 1, 0.28]);
+  const y = useTransform(scrollYProgress, [0, 0.28, 0.78, 1], [48, 0, 0, -42]);
+  const scale = useTransform(scrollYProgress, [0, 0.28, 0.78, 1], [0.975, 1, 1, 0.985]);
+  const filter = useTransform(scrollYProgress, [0, 0.24, 0.78, 1], ["blur(10px)", "blur(0px)", "blur(0px)", "blur(8px)"]);
+
+  return (
+    <motion.article
+      className="workflow-timeline-chapter"
+      id={`workflow-${step.phase.toLowerCase()}`}
+      ref={chapterRef}
+      style={shouldReduceMotion ? undefined : { opacity, y, scale, filter }}
+    >
+      <span className="workflow-kicker">{String(index + 1).padStart(2, "0")}</span>
+      <h2>{step.title}</h2>
+      <p>{step.example}</p>
+    </motion.article>
+  );
+}
+
+function WorkflowPinnedTimeline({ steps }: { steps: WorkflowStep[] }) {
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const shouldReduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: timelineRef,
+    offset: ["start start", "end end"]
+  });
+  const glowOpacity = useTransform(scrollYProgress, [0, 0.18, 0.82, 1], [0.35, 0.72, 0.72, 0.28]);
+  const glowX = useTransform(scrollYProgress, [0, 1], ["-32%", "32%"]);
+  // Blue progress rail that follows the scroll down the chapters; the base rail stays grey.
+  // Bound directly to scroll position (no spring) so the fill tracks the scroll instantly with no lag.
+  const railProgress = scrollYProgress;
+
+  return (
+    <div className="workflow-pinned-timeline" ref={timelineRef}>
+      <div className="workflow-pinned-visual" aria-hidden="true">
+        <motion.div className="workflow-pinned-aura" style={shouldReduceMotion ? undefined : { opacity: glowOpacity, x: glowX }} />
+        <figure className="workflow-pinned-figure">
+          <div className="workflow-pinned-image-stack">
+            {steps.map((step, index) => (
+              <WorkflowPinnedImage
+                step={step}
+                index={index}
+                progress={scrollYProgress}
+                total={steps.length}
+                shouldReduceMotion={shouldReduceMotion}
+                key={step.phase}
+              />
+            ))}
+          </div>
+        </figure>
+      </div>
+      <div className="workflow-pinned-copy">
+        <div className="workflow-copy-rail" aria-hidden="true">
+          <motion.span
+            className="workflow-copy-rail-fill"
+            style={shouldReduceMotion ? { scaleY: 1 } : { scaleY: railProgress }}
+          />
+        </div>
+        {steps.map((step, index) => (
+          <WorkflowTimelineChapter step={step} index={index} key={step.phase} />
+        ))}
+      </div>
+    </div>
+  );
+}
+function WorkflowCinematicStep({ step, index, total }: { step: WorkflowStep; index: number; total: number }) {
+  const panelRef = useRef<HTMLElement | null>(null);
+  const shouldReduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: panelRef,
+    offset: ["start end", "end start"]
+  });
+  const sceneOpacity = useTransform(scrollYProgress, [0, 0.16, 0.78, 1], [0, 1, 1, 0]);
+  const sceneY = useTransform(scrollYProgress, [0, 0.2, 0.72, 1], [92, 0, -12, -86]);
+  const copyY = useTransform(scrollYProgress, [0, 0.28, 0.78, 1], [46, 0, -18, -52]);
+  const copyOpacity = useTransform(scrollYProgress, [0, 0.18, 0.72, 1], [0, 1, 1, 0.18]);
+  const figureY = useTransform(scrollYProgress, [0, 0.24, 0.76, 1], [86, 0, -8, -58]);
+  const figureScale = useTransform(scrollYProgress, [0, 0.22, 0.72, 1], [0.94, 1, 1.015, 0.98]);
+  const figureRotateX = useTransform(scrollYProgress, [0, 0.32, 0.72, 1], [4, 0, 0, -2]);
+  const figureRotateY = useTransform(scrollYProgress, [0, 0.32, 0.72, 1], [-5, 0, 0, 3]);
+  const figureShadow = useTransform(
+    scrollYProgress,
+    [0, 0.28, 0.72, 1],
+    [
+      "0 22px 56px rgba(15, 23, 42, 0.10)",
+      "0 38px 94px rgba(15, 23, 42, 0.18)",
+      "0 44px 112px rgba(37, 99, 235, 0.16)",
+      "0 24px 64px rgba(15, 23, 42, 0.10)"
+    ]
+  );
+  const imageY = useTransform(scrollYProgress, [0, 1], [-34, 34]);
+  const imageScale = useTransform(scrollYProgress, [0, 0.5, 1], [1.07, 1.02, 1.06]);
+  const imageFilter = useTransform(
+    scrollYProgress,
+    [0, 0.22, 0.76, 1],
+    ["saturate(0.9) contrast(0.96) brightness(1.05)", "saturate(1.04) contrast(1.03) brightness(1)", "saturate(1.04) contrast(1.03) brightness(1)", "saturate(0.95) contrast(0.98) brightness(1.03)"]
+  );
+  const imageClip = useTransform(scrollYProgress, [0, 0.24, 0.72, 1], ["inset(7% 8% 10% 8% round 18px)", "inset(0% 0% 0% 0% round 18px)", "inset(0% 0% 0% 0% round 18px)", "inset(4% 5% 8% 5% round 16px)"]);
+  const sceneStyle = shouldReduceMotion ? undefined : { opacity: sceneOpacity, y: sceneY };
+  const copyStyle = shouldReduceMotion ? undefined : { opacity: copyOpacity, y: copyY };
+  const figureStyle = shouldReduceMotion ? undefined : {
+    y: figureY,
+    scale: figureScale,
+    rotateX: figureRotateX,
+    rotateY: figureRotateY,
+    boxShadow: figureShadow
+  };
+
+  return (
+    <section
+      className={`workflow-cinematic-step ${index % 2 === 0 ? "is-left" : "is-right"}`}
+      id={`workflow-${step.phase.toLowerCase()}`}
+      aria-label={`${step.phase} workflow step`}
+      ref={panelRef}
+    >
+      <motion.div className="workflow-cinematic-pin" style={sceneStyle}>
+        <motion.div className="workflow-cinematic-copy" style={copyStyle}>
+          <span className="workflow-kicker">{String(index + 1).padStart(2, "0")} / {step.phase}</span>
+          <h2>{step.title}</h2>
+          <p>{step.example}</p>
+          <strong>{step.outcome}</strong>
+        </motion.div>
+        <motion.figure
+          className="workflow-cinematic-figure"
+          style={figureStyle}
+        >
+          <div className="workflow-figure-chrome" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <motion.img
+            src={step.image}
+            alt={`${step.phase} workflow preview`}
+            loading="lazy"
+            style={shouldReduceMotion ? undefined : { y: imageY, scale: imageScale, filter: imageFilter, clipPath: imageClip }}
+          />
+          <figcaption className="workflow-figure-caption">
+            <span>{step.phase} view</span>
+            <strong>{index + 1 === total ? "Ready for production review" : `Next: ${workflow[index + 1]?.phase}`}</strong>
+          </figcaption>
+        </motion.figure>
+      </motion.div>
+    </section>
+  );
 }
 
 const footerColumns = [
@@ -869,6 +2076,77 @@ const fallbackPlaybook: BusinessPlaybook = {
   ],
   launchFocus: "complete the highest-volume call paths, connect the system of record, and test urgent handoffs."
 };
+
+// Generic actions an AI phone/chat agent can run, grouped by the job they do.
+// Shown in the workflow "Add an action" modal alongside the business-specific recommendations.
+const WORKFLOW_ACTION_LIBRARY: Array<{ category: string; actions: Array<{ name: string; detail: string }> }> = [
+  {
+    category: "Answer & inform",
+    actions: [
+      { name: "Answer approved FAQs", detail: "Respond using only approved company knowledge." },
+      { name: "Explain pricing and plans", detail: "Walk callers through current pricing and options." },
+      { name: "Share hours and location", detail: "Give opening hours, address, and directions." },
+      { name: "Explain a policy", detail: "Cover returns, cancellations, or terms from approved content." },
+      { name: "Check a status", detail: "Look up an order, appointment, or ticket status." }
+    ]
+  },
+  {
+    category: "Capture & qualify",
+    actions: [
+      { name: "Capture caller details", detail: "Collect name, contact, and reason for the call." },
+      { name: "Qualify a lead", detail: "Score fit and intent before routing to sales." },
+      { name: "Collect callback details", detail: "Record the best time and number to call back." },
+      { name: "Capture consent", detail: "Log opt-in for follow-ups and call recording." },
+      { name: "Record the call reason", detail: "Tag the intent for reporting and routing." }
+    ]
+  },
+  {
+    category: "Schedule & book",
+    actions: [
+      { name: "Book an appointment", detail: "Create a booking in the connected calendar." },
+      { name: "Reschedule or cancel", detail: "Update an existing booking on request." },
+      { name: "Check availability", detail: "Offer open slots from the calendar." },
+      { name: "Confirm a booking", detail: "Send a confirmation with the details." }
+    ]
+  },
+  {
+    category: "Create records",
+    actions: [
+      { name: "Create a follow-up task", detail: "Assign a next action to the right owner." },
+      { name: "Open a support ticket", detail: "Log an issue with summary and priority." },
+      { name: "Log to CRM", detail: "Write the contact and conversation to the CRM." },
+      { name: "Create a callback request", detail: "Queue a callback for the team." },
+      { name: "Attach a call summary", detail: "Save a concise transcript summary to the record." }
+    ]
+  },
+  {
+    category: "Route & escalate",
+    actions: [
+      { name: "Warm transfer to a team", detail: "Hand off live with full context." },
+      { name: "Escalate an urgent request", detail: "Flag and fast-track high-priority calls." },
+      { name: "Route by topic", detail: "Send the conversation to the right queue." },
+      { name: "Hand off to a human", detail: "Pass the conversation with a summary." }
+    ]
+  },
+  {
+    category: "Notify & follow up",
+    actions: [
+      { name: "Send a follow-up SMS", detail: "Text the caller a summary or link." },
+      { name: "Send a follow-up email", detail: "Email next steps or documents." },
+      { name: "Notify a channel", detail: "Post an alert to Slack or Teams." },
+      { name: "Trigger a webhook", detail: "Send the event to an external system." }
+    ]
+  },
+  {
+    category: "Verify & protect",
+    actions: [
+      { name: "Verify caller identity", detail: "Confirm identity before sensitive actions." },
+      { name: "Flag a sensitive topic", detail: "Detect risk and escalate with context." },
+      { name: "Confirm details", detail: "Read details back before acting." },
+      { name: "Take a payment", detail: "Securely collect a payment via the billing connector." }
+    ]
+  }
+];
 
 const businessPlaybooks: BusinessPlaybook[] = [
   {
@@ -1190,31 +2468,59 @@ const elevenLabsVoices: VoicePreset[] = [
     role: "Front desk",
     tone: "Clear, grounded",
     voiceId: "JBFqnCBsd6RMkjVDRZzb",
+    imageUrl: voiceAgentGeorgeUrl,
+    previewAudioUrl: "/voice-previews/george.mp3",
     sample: "Thanks for calling. I can help with booking, account questions, or getting you to the right person."
   },
   {
-    id: "antoni",
-    name: "Antoni",
+    id: "charlie",
+    name: "Charlie",
     role: "Support lead",
-    tone: "Calm, precise",
-    voiceId: "ErXwobaYiN019PkySvjV",
+    tone: "Deep, confident",
+    voiceId: "IKne3meq5aSn9XLyUdCD",
+    imageUrl: voiceAgentCharlieUrl,
+    previewAudioUrl: "/voice-previews/charlie.mp3",
     sample: "I can look that up for you now. Before I continue, can I confirm the name on the account?"
   },
   {
-    id: "adam",
-    name: "Adam",
+    id: "eric",
+    name: "Eric",
     role: "Operations",
-    tone: "Steady, direct",
-    voiceId: "pNInz6obpgDQGcFmaJgB",
-    sample: "I have the details in front of me. I will summarize the next step and send this to the team if needed."
+    tone: "Smooth, trustworthy",
+    voiceId: "cjVigY5qzO86Huf0OWal",
+    imageUrl: voiceAgentEricUrl,
+    previewAudioUrl: "/voice-previews/eric.mp3",
+    sample: "I have the details in front of me. I will explain the next step clearly and send this to the team if needed."
   },
   {
-    id: "bella",
-    name: "Bella",
+    id: "sarah",
+    name: "Sarah",
     role: "Concierge",
-    tone: "Bright, friendly",
+    tone: "Mature, reassuring",
     voiceId: "EXAVITQu4vr4xnSDxMaL",
+    imageUrl: voiceAgentSarahUrl,
+    previewAudioUrl: "/voice-previews/sarah.mp3",
     sample: "Absolutely. I can check availability, answer common questions, and make sure the handoff is clear."
+  },
+  {
+    id: "alice",
+    name: "Alice",
+    role: "Customer success",
+    tone: "Clear, engaging",
+    voiceId: "Xb7hH8MSUJpSbSDYk0k2",
+    imageUrl: voiceAgentAliceUrl,
+    previewAudioUrl: "/voice-previews/alice.mp3",
+    sample: "I can get this moving for you. Tell me what happened, and I will capture the important details."
+  },
+  {
+    id: "matilda",
+    name: "Matilda",
+    role: "Account care",
+    tone: "Professional, calm",
+    voiceId: "XrExE9yKIg1WjnnlVkGX",
+    imageUrl: voiceAgentMatildaUrl,
+    previewAudioUrl: "/voice-previews/matilda.mp3",
+    sample: "I can help with your account and explain the next step clearly before we pass anything to the team."
   }
 ];
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
@@ -1311,16 +2617,15 @@ function getBusinessSuggestions(query: string, limit = 5): BusinessSuggestion[] 
 function tailorConnectors(playbook: BusinessPlaybook, current: Connector[] = initialConnectors): Connector[] {
   return current.map((connector) => {
     const provider = playbook.connectorProviders[connector.key] || connector.provider;
-    const startsConnected = connector.key === "crm";
 
     return {
       ...connector,
       ...providerMetadata(provider, connector.key),
       provider,
-      connected: connector.connected || startsConnected,
-      connectionMode: connector.connectionMode || (startsConnected ? "demo" : undefined),
-      connectionMessage: connector.connectionMessage || (startsConnected ? provider + " connected." : undefined),
-      testStatus: connector.testStatus || (startsConnected ? "Connected" : undefined)
+      connected: connector.connected && (connector.connectionMode === "oauth" || connector.connectionMode === "sandbox"),
+      connectionMode: connector.connectionMode,
+      connectionMessage: connector.connectionMessage,
+      testStatus: connector.testStatus
     };
   });
 }
@@ -1414,6 +2719,27 @@ function providerIdFromName(provider: string, key: string) {
 
 function normalizeProviderName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function connectorKeyForIntegration(type: string, fallback: ConnectorGroup) {
+  const normalizedType = normalizeProviderName(type);
+
+  if (normalizedType.includes("crm")) return "crm";
+  if (normalizedType.includes("contact") || normalizedType.includes("phone") || normalizedType.includes("call")) return "telephony";
+  if (normalizedType.includes("knowledge") || normalizedType.includes("confluence") || normalizedType.includes("article")) return "knowledge";
+  if (
+    normalizedType.includes("help") ||
+    normalizedType.includes("support") ||
+    normalizedType.includes("service") ||
+    normalizedType.includes("desk") ||
+    normalizedType.includes("inbox") ||
+    normalizedType.includes("itsm")
+  ) return "helpdesk";
+  if (normalizedType.includes("billing") || normalizedType.includes("payment")) return "billing";
+  if (normalizedType.includes("analytics") || normalizedType.includes("bi")) return "analytics";
+  if (normalizedType.includes("warehouse") || normalizedType.includes("data")) return "data";
+
+  return fallback === "operations" ? "helpdesk" : fallback === "growth" ? "analytics" : "crm";
 }
 
 function connectorGroup(key: string): ConnectorGroup {
@@ -1610,6 +2936,14 @@ function App() {
     setAuthUser(payload.user);
     setGoogleAuthAvailable(payload.googleAuthAvailable);
     setAuthStatus(payload.user ? "signed-in" : "signed-out");
+
+    if (payload.user && payload.isNewUser) {
+      setSetupSessionId((current) => current + 1);
+      setView("setup");
+      window.history.replaceState(null, "", "?view=setup");
+      return;
+    }
+
     setView(payload.user ? "dashboard" : "auth");
     window.history.replaceState(null, "", payload.user ? "?view=dashboard" : "?view=login");
   };
@@ -1628,6 +2962,10 @@ function App() {
   };
 
   const backToHome = () => {
+    if (view === "setup") {
+      setSetupSessionId((current) => current + 1);
+    }
+
     setView("home");
     window.history.replaceState(null, "", window.location.pathname);
   };
@@ -1761,7 +3099,7 @@ function App() {
     }
 
     if (!authUser) {
-      return <AuthScreen googleAuthAvailable={googleAuthAvailable} onBack={backToHome} onSignedIn={handleSignedIn} />;
+      return <AuthScreen googleAuthAvailable={googleAuthAvailable} onBack={backToHome} onSignedIn={handleSignedIn} initialMode="login" />;
     }
 
     return (
@@ -1786,7 +3124,7 @@ function App() {
     }
 
     if (!authUser) {
-      return <AuthScreen googleAuthAvailable={googleAuthAvailable} onBack={backToHome} onSignedIn={handleSignedIn} />;
+      return <AuthScreen googleAuthAvailable={googleAuthAvailable} onBack={backToHome} onSignedIn={handleSignedIn} initialMode="signup" />;
     }
 
     return (
@@ -1969,6 +3307,7 @@ function App() {
           <a href="#platform">Platform</a>
           <a href="#demo">Demo</a>
           <a href="#handoff">Launch</a>
+          <a href="#intelligence">Intelligence</a>
           <a href="#testimonials">Reviews</a>
         </nav>
         <div className="nav-actions">
@@ -1998,54 +3337,9 @@ function App() {
           </div>
         </section>
 
-        <section className="section platform-section" id="platform" ref={platformRef}>
-          <motion.div className="platform-sticky">
-            <motion.div className="section-heading platform-heading">
-              <motion.h2 className="platform-heading-line platform-word-heading" aria-label="Build. Test. Launch Clara, your AI agent.">
-                {[
-                  { text: "Build", tone: "is-quiet" },
-                  { text: "Test", tone: "is-quiet" },
-                  { text: "Launch", tone: "is-command" },
-                  { text: "Clara", tone: "is-agent" },
-                  { text: "your AI agent", tone: "is-resolution" }
-                ].map((line, index) => (
-                  <motion.span
-                    className={`platform-title-line ${line.tone}`}
-                    style={shouldReduceMotion ? visibleWordStyle : platformWordStyles[index]}
-                    aria-hidden="true"
-                    key={line.text}
-                  >
-                    {line.text}
-                  </motion.span>
-                ))}
-              </motion.h2>
-            </motion.div>
-
-            <motion.div className="workflow-viewport" style={shouldReduceMotion ? visibleViewportStyle : workflowViewportStyle}>
-              <motion.div className="workflow-grid">
-                {workflow.slice(0, 3).map((step, index) => (
-                  <motion.article
-                    className="workflow-card"
-                    style={shouldReduceMotion ? visibleCardStyle : workflowCardStyles[index]}
-                    key={step.title}
-                  >
-                    <motion.div className="workflow-image" style={shouldReduceMotion ? visibleImageStyle : workflowImageStyles[index]}>
-                      <motion.img src={step.image} alt="" loading="lazy" style={shouldReduceMotion ? visiblePhotoStyle : workflowPhotoStyles[index]} />
-                      <motion.span className="workflow-image-glow" style={shouldReduceMotion ? hiddenGlowStyle : workflowGlowStyles[index]} aria-hidden="true" />
-                      <a className="workflow-arrow" href="#demo" aria-label={`${step.phase}: open demo`}>
-                        <span aria-hidden="true" />
-                      </a>
-                    </motion.div>
-                    <motion.div className="workflow-card-copy" style={shouldReduceMotion ? visibleLineStyle : workflowCopyStyles[index]}>
-                      <h3>{step.title}</h3>
-                      <p>{step.example}</p>
-                      <small>{step.outcome}</small>
-                    </motion.div>
-                  </motion.article>
-                ))}
-              </motion.div>
-            </motion.div>
-          </motion.div>
+        <section className="section platform-section workflow-scroll-story" id="platform" ref={platformRef} aria-label="Build, test, and launch workflow">
+          <WorkflowScrollLine steps={workflow.slice(0, 3).map((step) => step.phase)} />
+          <WorkflowPinnedTimeline steps={workflow.slice(0, 3)} />
         </section>
 
         <section className="section marketing-video-section" aria-label="RelayClarity launch confidence video">
@@ -2396,6 +3690,58 @@ function App() {
           </Reveal>
         </section>
 
+        <section className="section intelligence-section" id="intelligence" aria-label="Dashboard and machine learning">
+          <div className="intelligence-glow" aria-hidden="true" />
+          <div className="intelligence-shell">
+            <motion.div
+              className="intelligence-heading"
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: "-15% 0px" }}
+              transition={{ staggerChildren: 0.12, delayChildren: 0.05 }}
+            >
+              <motion.p className="eyebrow" variants={intelligenceReveal}>Under the hood</motion.p>
+              <motion.h2 variants={intelligenceReveal}>Powered by real machine learning.</motion.h2>
+              <motion.p variants={intelligenceReveal}>
+                Every call is scored and ranked by risk. Scroll to see how the model decides &mdash; and
+                how a person always stays in the loop.
+              </motion.p>
+            </motion.div>
+
+            <MagicBento
+              items={[
+                {
+                  size: "featured",
+                  label: "Live queue",
+                  title: "Live risk queue",
+                  body: "Calls and tickets are scored the moment they happen and ranked by risk, so urgent and sensitive cases rise to the top instead of getting buried.",
+                },
+                {
+                  size: "tall",
+                  label: "Transparency",
+                  title: "A transparent model",
+                  body: "A logistic-regression classifier chosen for auditability. Every prediction returns its class probabilities and the features that drove it.",
+                },
+                {
+                  label: "Explainability",
+                  title: "Explained in plain English",
+                  body: "No black box. Each score comes with readable reasons and the exact signals it matched, so a human can trust or challenge it.",
+                },
+                {
+                  label: "Oversight",
+                  title: "Humans stay in control",
+                  body: "The model is advisory — it never auto-closes or auto-routes. Owners review and override every call, and overrides feed the next training round.",
+                },
+                {
+                  label: "Governance",
+                  title: "Monitored and governed",
+                  body: "Drift detection, fairness checks, and a deployment gate guard every release. A new model only ships once it clears the bar.",
+                },
+              ]}
+            />
+          </div>
+        </section>
+
         <section className="section testimonials-section" id="testimonials" ref={customerStoriesRef}>
           <div className="customer-stories-sticky">
             <Reveal className="testimonials-heading">
@@ -2556,15 +3902,24 @@ function AuthScreen({
   googleAuthAvailable,
   onBack,
   onSignedIn,
+  initialMode = "login",
 }: {
   googleAuthAvailable: boolean;
   onBack: () => void;
   onSignedIn: (payload: AuthPayload) => void;
+  initialMode?: "login" | "signup";
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSignup = mode === "signup";
+
+  useEffect(() => {
+    setMode(initialMode);
+    setStatus("");
+  }, [initialMode]);
 
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2574,7 +3929,7 @@ function AuthScreen({
     try {
       const payload = await fetchJsonFromApi<AuthPayload>("/api/auth/email", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, mode }),
       });
       onSignedIn(payload);
     } catch (error) {
@@ -2599,9 +3954,11 @@ function AuthScreen({
         <div className="auth-panel">
           <div className="auth-copy">
             <p className="eyebrow">Workspace access</p>
-            <h1>Welcome back.</h1>
+            <h1>{isSignup ? "Create your workspace." : "Welcome back."}</h1>
             <p>
-              Sign in to continue building and launching your AI agent workspace.
+              {isSignup
+                ? "Create a new account, then complete the setup flow before anything is saved to the dashboard."
+                : "Sign in to continue building and launching your AI agent workspace."}
             </p>
           </div>
 
@@ -2613,9 +3970,9 @@ function AuthScreen({
           </button>
           <img className="auth-logo" src={relayclarityLogoUrl} alt="RelayClarity" />
           <div className="auth-form-heading">
-            <span className="auth-kicker">Sign in</span>
-            <h2>Open dashboard</h2>
-            <p>Use Google or continue with your email and password.</p>
+            <span className="auth-kicker">{isSignup ? "Sign up" : "Sign in"}</span>
+            <h2>{isSignup ? "Start setup" : "Open dashboard"}</h2>
+            <p>{isSignup ? "Use Google or create a new email account." : "Use Google or continue with your email and password."}</p>
           </div>
 
           <button className="google-button" type="button" onClick={startGoogleLogin}>
@@ -2625,7 +3982,7 @@ function AuthScreen({
               <path fill="#FBBC05" d="M5.25 14.31a7.21 7.21 0 0 1 0-4.62V6.64H1.26a12 12 0 0 0 0 10.72l3.99-3.05Z" />
               <path fill="#EA4335" d="M12 4.72c1.76 0 3.34.61 4.59 1.79l3.43-3.43A11.51 11.51 0 0 0 12 0 12 12 0 0 0 1.26 6.64l3.99 3.05C6.2 6.84 8.86 4.72 12 4.72Z" />
             </svg>
-            Continue with Google
+            {isSignup ? "Continue with Google" : "Continue with Google"}
           </button>
 
           <div className="auth-divider"><span>or</span></div>
@@ -2649,14 +4006,27 @@ function AuthScreen({
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Enter your password"
-                autoComplete="current-password"
+                autoComplete={isSignup ? "new-password" : "current-password"}
                 required
               />
             </label>
             <button className="dark-button auth-submit" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Opening dashboard..." : "Continue with email and password"}
+              {isSubmitting
+                ? isSignup ? "Creating account..." : "Opening dashboard..."
+                : isSignup ? "Create account and start setup" : "Continue with email and password"}
             </button>
           </form>
+
+          <button
+            className="quiet-button"
+            type="button"
+            onClick={() => {
+              setMode(isSignup ? "login" : "signup");
+              setStatus("");
+            }}
+          >
+            {isSignup ? "Already have an account? Sign in" : "New here? Create an account"}
+          </button>
 
           {status ? <p className="auth-status">{status}</p> : null}
         </div>
@@ -2683,6 +4053,7 @@ function Dashboard({
   const confirmedMatch = useMemo(() => hasBusinessType ? getBusinessMatch(confirmedBusinessType) : null, [confirmedBusinessType, hasBusinessType]);
   const playbook = confirmedMatch?.playbook || fallbackPlaybook;
   const [connectors, setConnectors] = useState(() => tailorConnectors(fallbackPlaybook));
+  const connectorsRef = useRef(connectors);
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [latency, setLatency] = useState(720);
   const [bargeIn, setBargeIn] = useState(true);
@@ -2692,6 +4063,8 @@ function Dashboard({
   });
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
+  const [activeCapabilityCategory, setActiveCapabilityCategory] = useState("");
+  const [focusedCapabilityTitle, setFocusedCapabilityTitle] = useState("");
   const [useCase, setUseCase] = useState(playbook.missions[0]);
   const [agentName, setAgentName] = useState("");
   const [agentPurpose, setAgentPurpose] = useState("");
@@ -2707,38 +4080,66 @@ function Dashboard({
     actionRecord: { x: 836, y: 432 }
   });
   const [customAgents, setCustomAgents] = useState<{ id: string; name: string; job: string }[]>([]);
-  const [customApps, setCustomApps] = useState<{ id: string; name: string; detail: string }[]>([]);
-  const [customActions, setCustomActions] = useState<{ id: string; name: string; detail: string }[]>([]);
+  const [customApps, setCustomApps] = useState<{ id: string; agentId: string; name: string; detail: string }[]>([]);
+  const [customActions, setCustomActions] = useState<{ id: string; agentId: string; name: string; detail: string }[]>([]);
   const [selectedWorkflowAgentId, setSelectedWorkflowAgentId] = useState("agentIntake");
   const [hiddenWorkflowAgentIds, setHiddenWorkflowAgentIds] = useState<string[]>([]);
+  const [workflowAgentNameEdits, setWorkflowAgentNameEdits] = useState<Record<string, string>>({});
   const [workflowNodeEdits, setWorkflowNodeEdits] = useState<Record<string, { title?: string; detail?: string }>>({});
   const [workflowNodeOffsets, setWorkflowNodeOffsets] = useState<Record<string, { x: number; y: number }>>({});
-  const [extraWorkflowConnectorKeys, setExtraWorkflowConnectorKeys] = useState<Record<string, string[]>>({});
-  const [isWorkflowAddDrawerOpen, setIsWorkflowAddDrawerOpen] = useState(false);
-  const [workflowBoardSize, setWorkflowBoardSize] = useState({ width: 1060, height: 390 });
-  const [activeWorkflowNodeDrag, setActiveWorkflowNodeDrag] = useState<{
-    nodeId: string;
+  const [selectedWorkflowNodeIds, setSelectedWorkflowNodeIds] = useState<string[]>([]);
+  const [inspectedWorkflowNodeId, setInspectedWorkflowNodeId] = useState<string | null>(null);
+  const [workflowMarquee, setWorkflowMarquee] = useState<{
+    active: boolean;
     startX: number;
     startY: number;
-    originX: number;
-    originY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+  const [workflowContextMenu, setWorkflowContextMenu] = useState<{
+    x: number;
+    y: number;
+    target: "board" | "node" | "agent";
+    nodeId?: string;
+    agentId?: string;
+  } | null>(null);
+  const [workflowCopyToast, setWorkflowCopyToast] = useState(false);
+  const workflowCopyToastTimer = useRef<number | null>(null);
+  const [extraWorkflowConnectorKeys, setExtraWorkflowConnectorKeys] = useState<Record<string, string[]>>({});
+  const [isWorkflowAddDrawerOpen, setIsWorkflowAddDrawerOpen] = useState(false);
+  const [workflowBoardSize, setWorkflowBoardSize] = useState({ width: 1100, height: 700 });
+  const [workflowNodeRects, setWorkflowNodeRects] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
+  const [activeWorkflowNodeDrag, setActiveWorkflowNodeDrag] = useState<{
+    nodeId: string;
+    ids: string[];
+    startX: number;
+    startY: number;
+    origins: Record<string, { x: number; y: number }>;
     moved: boolean;
   } | null>(null);
+  const [workflowAddPicker, setWorkflowAddPicker] = useState<"app" | "action" | null>(null);
+  const [workflowAddTab, setWorkflowAddTab] = useState(0);
+  const [workflowClipboard, setWorkflowClipboard] = useState<{ kind: "app" | "action"; name: string; detail: string; x: number; y: number }[]>([]);
   const [workflowDrag, setWorkflowDrag] = useState<{ id: string; width: number } | null>(null);
   const workflowCanvasRef = useRef<HTMLDivElement | null>(null);
   const [launchChannel, setLaunchChannel] = useState(playbook.channels[0]);
-  const [selectedVoiceId, setSelectedVoiceId] = useState(elevenLabsVoices[0].id);
+  const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [confirmedVoiceId, setConfirmedVoiceId] = useState("");
   const [voiceSpeed, setVoiceSpeed] = useState(1);
   const [voiceStability, setVoiceStability] = useState(58);
+  const [voiceSimilarity, setVoiceSimilarity] = useState(75);
   const [voiceStyle, setVoiceStyle] = useState(16);
-  const [previewText, setPreviewText] = useState("Hello, I am your virtual agent. I can help answer questions and get you to the right person.");
+  const [voiceSpeakerBoost, setVoiceSpeakerBoost] = useState(true);
   const [voicePreviewStatus, setVoicePreviewStatus] = useState("Ready to preview with ElevenLabs.");
-  const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
   const [voicePreviewCompleted, setVoicePreviewCompleted] = useState(false);
+  const [realVoicePreviewKey, setRealVoicePreviewKey] = useState("");
+  const [voiceGenerationCount, setVoiceGenerationCount] = useState(0);
+  const [isRegeneratingVoice, setIsRegeneratingVoice] = useState(false);
   const [activeAudioUrl, setActiveAudioUrl] = useState("");
+  const [playingVoiceId, setPlayingVoiceId] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const voicePreviewRequestRef = useRef(0);
+  const generatedAudioUrlRef = useRef("");
+  const generatedVoiceSettingsKeyRef = useRef("");
   const [connectorCategory, setConnectorCategory] = useState<ConnectorGroup>("core");
   const [activeConnectorKey, setActiveConnectorKey] = useState("crm");
   const [report, setReport] = useState("Prepare the launch pack when setup, connectors, voice tuning, and evaluation evidence are ready.");
@@ -2748,7 +4149,7 @@ function Dashboard({
   const [setupIntegrationCategory, setSetupIntegrationCategory] = useState<ConnectorGroup>("core");
   const [isSetupIntegrationModalOpen, setIsSetupIntegrationModalOpen] = useState(false);
   const [setupLoginIntegration, setSetupLoginIntegration] = useState<{ company: string; type: string; logoUrl: string } | null>(null);
-  const [setupLoginIntegrationStage, setSetupLoginIntegrationStage] = useState<"credentials" | "connecting" | "success">("credentials");
+  const [setupLoginIntegrationStage, setSetupLoginIntegrationStage] = useState<"credentials" | "connecting" | "success" | "blocked">("credentials");
   const [setupLoginIntegrationEmail, setSetupLoginIntegrationEmail] = useState("");
   const [setupLoginIntegrationPassword, setSetupLoginIntegrationPassword] = useState("");
   const setupIntegrationLoginTimers = useRef<number[]>([]);
@@ -2763,8 +4164,17 @@ function Dashboard({
   const [testRunState, setTestRunState] = useState<TestRunState>("idle");
   const [activeRunIndex, setActiveRunIndex] = useState(0);
   const [completedRunCount, setCompletedRunCount] = useState(0);
+  const [runningChecks, setRunningChecks] = useState<TestScenarioResult["checks"] | null>(null);
+  const [revealedCheckCount, setRevealedCheckCount] = useState(0);
+  const [realResults, setRealResults] = useState<(TestScenarioResult | null)[]>([]);
+  const [testMode, setTestMode] = useState<"real" | "simulated" | null>(null);
+  const testRunTokenRef = useRef(0);
   const [reviewedAgentIds, setReviewedAgentIds] = useState<string[]>(["agentIntake"]);
+  const [agentBuildComplete, setAgentBuildComplete] = useState(false);
+  const [agentBuildStage, setAgentBuildStage] = useState(0);
+  const [lastBuiltAgentKey, setLastBuiltAgentKey] = useState("");
   const testRunTimers = useRef<number[]>([]);
+  const autoStartedTestKeyRef = useRef("");
   const setupIntegrationCategories = [
     { id: "core", label: "Core" },
     { id: "operations", label: "Operations" },
@@ -2824,23 +4234,60 @@ function Dashboard({
     setSetupLoginIntegrationEmail("");
     setSetupLoginIntegrationPassword("");
   };
-  const submitSetupIntegrationLogin = (event: React.FormEvent<HTMLFormElement>) => {
+  const submitSetupIntegrationLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!setupLoginIntegration || !setupLoginIntegrationEmail.trim() || !setupLoginIntegrationPassword.trim()) {
+    if (!setupLoginIntegration || !setupLoginIntegrationEmail.trim()) {
       return;
     }
 
     clearSetupIntegrationLoginTimers();
     setSetupLoginIntegrationStage("connecting");
 
-    const successTimer = window.setTimeout(() => {
-      setSetupLoginIntegrationStage("success");
-      setOtherPlatformNote(setupLoginIntegration.company + " (" + setupLoginIntegration.type + ")");
-    }, 1450);
+    try {
+      const connectorKey = connectorKeyForIntegration(setupLoginIntegration.type, setupIntegrationCategory);
+      const connection = await fetchJsonFromApi<IntegrationConnectResult>("/api/integrations/connect", {
+        method: "POST",
+        body: JSON.stringify({
+          providerId: providerIdFromName(setupLoginIntegration.company, connectorKey),
+          providerName: setupLoginIntegration.company,
+          category: connectorKey,
+          workspaceName,
+          mode: "sandbox"
+        })
+      });
 
-    const closeTimer = window.setTimeout(closeSetupIntegrationModal, 2450);
-    setupIntegrationLoginTimers.current = [successTimer, closeTimer];
+      setConnectors((current) => current.map((connector) =>
+        connector.key === connectorKey ? {
+          ...connector,
+          providerId: connection.providerId,
+          provider: connection.name,
+          logoUrl: setupLoginIntegration.logoUrl || connection.logoUrl || connector.logoUrl,
+          connected: true,
+          connectionMode: connection.mode,
+          connectionMessage: connection.message,
+          scopes: connection.scopes,
+          testStatus: "Passed",
+          testChecks: [
+            { name: "Authentication", status: "passed" },
+            { name: "Scopes", status: "passed" },
+            { name: "Provider account", status: "passed" },
+            { name: "Dashboard handoff", status: "passed" }
+          ],
+          lastCheckedAt: connection.connectedAt
+        } : connector
+      ));
+      setActiveConnectorKey(connectorKey);
+      setOtherPlatformNote(setupLoginIntegration.company + " (" + setupLoginIntegration.type + ")");
+      setConnectionStatus(`${connection.name} connected in ${connection.mode} mode.`);
+      setSetupLoginIntegrationStage("success");
+
+      const closeTimer = window.setTimeout(closeSetupIntegrationModal, 900);
+      setupIntegrationLoginTimers.current = [closeTimer];
+    } catch (error) {
+      setSetupLoginIntegrationStage("blocked");
+      setConnectionStatus(error instanceof Error ? error.message : "Unable to connect integration.");
+    }
   };
   const confirmedBusinessLabel = confirmedBusinessType.trim().length > 2 ? confirmedBusinessType.trim() : "business";
   const confirmedWorkspaceName = workspaceName.trim() || confirmedBusinessLabel;
@@ -2865,20 +4312,137 @@ function Dashboard({
 
     return groups;
   }, [zoomAiCapabilities]);
-  const setupSteps = ["Workspace", "Systems", "Agent", "Voice", "Tests", "Launch"];
+  const activeCapabilityGroup = useMemo(() => {
+    return groupedZoomAiCapabilities.find((group) => group.title === activeCapabilityCategory) || groupedZoomAiCapabilities[0];
+  }, [activeCapabilityCategory, groupedZoomAiCapabilities]);
+  const focusedCapability = useMemo(() => {
+    return (
+      activeCapabilityGroup?.items.find((capability) => capability.title === focusedCapabilityTitle) ||
+      activeCapabilityGroup?.items[0] ||
+      zoomAiCapabilities[0]
+    );
+  }, [activeCapabilityGroup, focusedCapabilityTitle, zoomAiCapabilities]);
+  const setupSteps = ["Workspace", "Systems", "Voice", "Agent", "Tests", "Confirm"];
   const selectedZoomCapabilityCount = selectedCapabilities.length;
-  const hasLaunchRequestDetails = websiteUrl.trim().length > 0 && phoneContactNumber.trim().length > 0;
+  const trimmedWebsite = websiteUrl.trim();
+  const trimmedPhone = phoneContactNumber.trim();
+  const isValidWebsite = ((): boolean => {
+    if (!trimmedWebsite) return false;
+    if (/\s/.test(trimmedWebsite)) return false;
+    const candidate = /^https?:\/\//i.test(trimmedWebsite) ? trimmedWebsite : `https://${trimmedWebsite}`;
+    try {
+      const host = new URL(candidate).hostname;
+      return host.length <= 253 && /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(host);
+    } catch {
+      return false;
+    }
+  })();
+  const phoneDigits = trimmedPhone.replace(/\D/g, "");
+  const isValidPhone =
+    trimmedPhone.length > 0 &&
+    /^[+0-9()\-.\s]+$/.test(trimmedPhone) &&
+    phoneDigits.length >= 7 &&
+    phoneDigits.length <= 15;
+  const websiteError = trimmedWebsite.length > 0 && !isValidWebsite;
+  const phoneError = trimmedPhone.length > 0 && !isValidPhone;
+  const hasLaunchRequestDetails = isValidWebsite && isValidPhone;
 
-  const connectedCount = connectors.filter((connector) => connector.connected).length;
+  const realConnectedConnectors = connectors.filter((connector) => connector.connected && (connector.connectionMode === "oauth" || connector.connectionMode === "sandbox"));
+  const connectedCount = realConnectedConnectors.length;
   const systemsComplete = connectedCount > 0;
-  const agentsComplete = true;
-  const testsComplete = testRunState === "complete" && completedRunCount >= playbook.tests.length;
-  const voiceConfirmed = confirmedVoiceId === selectedVoiceId;
+  const selectedVoice = elevenLabsVoices.find((voice) => voice.id === selectedVoiceId) || null;
+  const voiceSettingsKey = selectedVoice ? [
+    selectedVoice.id,
+    voiceSpeed,
+    voiceStability,
+    voiceSimilarity,
+    voiceStyle,
+    voiceSpeakerBoost ? "speaker-boost" : "no-speaker-boost"
+  ].join("::") : "";
+  const realVoiceReady = Boolean(selectedVoice && realVoicePreviewKey === voiceSettingsKey);
+  const voiceConfirmed = Boolean(selectedVoice && confirmedVoiceId === selectedVoice.id);
+  const productionVoiceReady = voiceConfirmed;
+  const agentBuildKey = [
+    confirmedWorkspaceName,
+    confirmedBusinessType,
+    selectedCapabilities.join("|"),
+    realConnectedConnectors.map((connector) => `${connector.key}:${connector.provider}`).join("|"),
+    selectedVoiceId,
+    voiceSpeed,
+    voiceStability,
+    voiceSimilarity,
+    voiceStyle,
+    voiceSpeakerBoost ? "speaker-boost" : "no-speaker-boost",
+    latency,
+    bargeIn ? "barge" : "no-barge"
+  ].join("::");
+  const agentsComplete = agentBuildComplete && lastBuiltAgentKey === agentBuildKey;
+  const agentBuildStepClass = (index: number) => {
+    if (agentBuildStage > index) {
+      return "is-complete";
+    }
+
+    if (agentBuildStage === index) {
+      return "is-active";
+    }
+
+    return "";
+  };
+  const previewResults = useMemo<TestScenarioResult[]>(() => {
+    const hasRequiredSystem = realConnectedConnectors.length > 0;
+    const hasKnowledgeSystem = realConnectedConnectors.some((connector) => connector.key === "knowledge");
+    const hasHandoffSystem = realConnectedConnectors.some((connector) => ["crm", "helpdesk", "telephony"].includes(connector.key));
+    const hasSafetyCoverage = selectedCapabilities.some((capability) => /fallback|quality|assist|routing|wrap/i.test(capability));
+    const hasAgentInstructions = Boolean(agentName.trim() && agentPurpose.trim() && agentKnowledge.trim() && agentHandoff.trim());
+
+    return playbook.tests.map((scenario, index) => {
+      const checks = [
+        { name: "Connected production system", passed: hasRequiredSystem },
+        { name: "Confirmed caller voice", passed: productionVoiceReady },
+        { name: "Generated agent workspace", passed: agentsComplete },
+        {
+          name: index === 0 ? "Handoff path available" : index === 1 ? "Knowledge path available" : "Guardrail path available",
+          passed: index === 0 ? hasHandoffSystem : index === 1 ? hasKnowledgeSystem || hasRequiredSystem : hasSafetyCoverage || Boolean(agentHandoff.trim())
+        },
+        { name: "Agent instructions complete", passed: hasAgentInstructions }
+      ];
+      const passedChecks = checks.filter((check) => check.passed).length;
+      const setupScore = Math.round((passedChecks / checks.length) * 100);
+      const score = Math.min(99, Math.round((scenario.score * 0.58) + (setupScore * 0.42)));
+      const passed = score >= 84 && checks.every((check) => check.passed);
+      const failedCheck = checks.find((check) => !check.passed)?.name;
+
+      return {
+        score,
+        passed,
+        checks,
+        result: passed
+          ? scenario.result
+          : `${failedCheck || "Launch gate"} needs setup before this scenario can pass.`
+      };
+    });
+  }, [
+    agentHandoff,
+    agentKnowledge,
+    agentName,
+    agentPurpose,
+    agentsComplete,
+    playbook.tests,
+    productionVoiceReady,
+    realConnectedConnectors,
+    selectedCapabilities
+  ]);
+  const scenarioResults = useMemo<TestScenarioResult[]>(
+    () => playbook.tests.map((_, index) => realResults[index] ?? previewResults[index]),
+    [playbook.tests, previewResults, realResults]
+  );
+  const testsPassed = scenarioResults.length > 0 && scenarioResults.every((result) => result.passed);
+  const testsComplete = testRunState === "complete" && completedRunCount >= playbook.tests.length && testsPassed;
   const stepCompletion = [
     hasBusinessType && selectedZoomCapabilityCount > 0,
     systemsComplete,
+    productionVoiceReady,
     agentsComplete,
-    voiceConfirmed,
     testsComplete,
     hasLaunchRequestDetails
   ];
@@ -2889,23 +4453,37 @@ function Dashboard({
   const continueRequirement = [
     "Confirm the business type and select at least one Zoom AI capability.",
     `Connect at least one system (${connectedCount} connected).`,
-    "Review the generated agent workflow.",
-    "Choose and confirm a voice for callers.",
+    "Choose and confirm a voice. Playing a preview is optional.",
+    "Wait for RelayClarity to generate the agent workspace.",
     "Run the launch tests before continuing.",
-    "Enter the website URL and phone contact number."
+    "Enter a valid website URL and phone number."
   ][step];
   const readiness = Math.min(98, 28 + Math.round((connectedCount / connectors.length) * 48) + (latency <= 800 && bargeIn ? 18 : 10));
   const selectedScenario = playbook.tests[scenarioIndex] || playbook.tests[0] || fallbackPlaybook.tests[0];
+  const selectedScenarioResult = scenarioResults[scenarioIndex] || scenarioResults[0] || {
+    score: selectedScenario.score,
+    passed: false,
+    result: selectedScenario.result,
+    checks: []
+  };
+  const isActiveRunningScenario = testRunState === "running" && scenarioIndex === activeRunIndex && runningChecks !== null;
+  const detailChecks = isActiveRunningScenario
+    ? (runningChecks || []).slice(0, revealedCheckCount)
+    : selectedScenarioResult.checks || [];
+  const detailScoreLabel = `${selectedScenarioResult.score}%`;
+  const detailStatusLabel = selectedScenarioResult.passed ? "Scenario passed" : "Needs setup";
   const launchGateScore = useMemo(() => {
     const scenarioScores = playbook.tests.length
-      ? playbook.tests.reduce((total, scenario) => total + scenario.score, 0) / playbook.tests.length
-      : selectedScenario.score;
+      ? scenarioResults.reduce((total, result) => total + result.score, 0) / playbook.tests.length
+      : selectedScenarioResult.score;
 
     return Math.round(scenarioScores * 0.74 + readiness * 0.26);
-  }, [playbook.tests, readiness, selectedScenario.score]);
+  }, [playbook.tests.length, readiness, scenarioResults, selectedScenarioResult.score]);
   const visibleConnectors = connectors.filter((connector) => connectorGroup(connector.key) === connectorCategory);
   const activeConnector = connectors.find((connector) => connector.key === activeConnectorKey) || connectors[0];
-  const selectedVoice = elevenLabsVoices.find((voice) => voice.id === selectedVoiceId) || elevenLabsVoices[0];
+  useEffect(() => {
+    connectorsRef.current = connectors;
+  }, [connectors]);
 
   useEffect(() => {
     if (!canOpenStep(step)) {
@@ -2930,12 +4508,55 @@ function Dashboard({
     setTestRunState("idle");
     setActiveRunIndex(0);
     setCompletedRunCount(0);
+    setRealResults([]);
+    setTestMode(null);
+    testRunTokenRef.current += 1;
     setSelectedWorkflowAgentId("agentIntake");
     setReviewedAgentIds(["agentIntake"]);
     setHiddenWorkflowAgentIds([]);
     setWorkflowNodeEdits({});
     setWorkflowNodeOffsets({});
+    setAgentBuildComplete(false);
+    setAgentBuildStage(0);
+    setLastBuiltAgentKey("");
   }, [playbook]);
+
+  useEffect(() => {
+    if (lastBuiltAgentKey && lastBuiltAgentKey !== agentBuildKey) {
+      setAgentBuildComplete(false);
+      setAgentBuildStage(0);
+    }
+  }, [agentBuildKey, lastBuiltAgentKey]);
+
+  useEffect(() => {
+    if (step !== 3 || !productionVoiceReady || !systemsComplete || !hasBusinessType) {
+      return;
+    }
+
+    if (agentBuildComplete && lastBuiltAgentKey === agentBuildKey) {
+      return;
+    }
+
+    setAgentBuildComplete(false);
+    setAgentBuildStage(0);
+
+    const stageTimers = [
+      window.setTimeout(() => setAgentBuildStage(1), 900),
+      window.setTimeout(() => setAgentBuildStage(2), 1900),
+      window.setTimeout(() => setAgentBuildStage(3), 3000),
+      window.setTimeout(() => setAgentBuildStage(4), 4100)
+    ];
+    const buildTimer = window.setTimeout(() => {
+      setLastBuiltAgentKey(agentBuildKey);
+      setAgentBuildComplete(true);
+      setReviewedAgentIds((current) => current.includes("agentIntake") ? current : ["agentIntake", ...current]);
+    }, 5000);
+
+    return () => {
+      stageTimers.forEach((timer) => window.clearTimeout(timer));
+      window.clearTimeout(buildTimer);
+    };
+  }, [agentBuildComplete, agentBuildKey, hasBusinessType, lastBuiltAgentKey, productionVoiceReady, step, systemsComplete]);
 
   const clearTestRunTimers = () => {
     testRunTimers.current.forEach((timer) => window.clearTimeout(timer));
@@ -2943,18 +4564,6 @@ function Dashboard({
   };
 
   useEffect(() => clearTestRunTimers, []);
-
-  useEffect(() => {
-    setVoicePreviewCompleted(false);
-  }, [previewText, voiceSpeed, voiceStability, voiceStyle, latency, bargeIn]);
-
-  useEffect(() => {
-    return () => {
-      if (activeAudioUrl) {
-        URL.revokeObjectURL(activeAudioUrl);
-      }
-    };
-  }, [activeAudioUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3007,7 +4616,7 @@ function Dashboard({
         return;
       }
 
-      const connector = connectors.find((item) => item.providerId === event.data.provider);
+      const connector = connectorsRef.current.find((item) => item.providerId === event.data.provider);
 
       if (!connector) {
         setConnectionStatus(`${event.data.provider} authorization completed, but the dashboard could not match it to a connector.`);
@@ -3105,28 +4714,49 @@ function Dashboard({
         return;
       }
 
-      setConnectionStatus(`${connection.name} did not return an authorization URL, so it was not linked.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to connect integration.";
-      setConnectionStatus(`${activeConnector.provider} added to this demo workspace.`);
       setConnectors((current) =>
         current.map((connector) =>
           connector.key === activeConnector.key ? {
             ...connector,
+            providerId: connection.providerId,
+            provider: connection.name,
+            logoUrl: connection.logoUrl || connector.logoUrl,
             connected: true,
-            connectionMode: "demo",
-            connectionMessage: `${connector.provider} is available in this workspace demo. ${message}`,
-            scopes: [],
-            testStatus: "Demo connected",
+            connectionMode: connection.mode,
+            connectionMessage: connection.message,
+            scopes: connection.scopes,
+            testStatus: "Passed",
             testChecks: [
-              { name: "Workspace", status: "passed" },
-              { name: "Agent canvas", status: "passed" },
-              { name: "Live OAuth", status: "demo" }
+              { name: "Authentication", status: "passed" },
+              { name: "Scopes", status: "passed" },
+              { name: "Provider account", status: "passed" },
+              { name: "Dashboard handoff", status: "passed" }
+            ],
+            lastCheckedAt: connection.connectedAt
+          } : connector
+        )
+      );
+      setConnectionStatus(`${connection.name} connected in ${connection.mode} mode.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to connect integration.";
+      setConnectionStatus(`${activeConnector.provider} was not linked. ${message}`);
+      setConnectors((current) =>
+        current.map((connector) =>
+          connector.key === activeConnector.key ? {
+            ...connector,
+            connected: false,
+            connectionMode: undefined,
+            connectionMessage: message,
+            scopes: [],
+            testStatus: "Setup required",
+            testChecks: [
+              { name: "Authentication", status: "missing" },
+              { name: "Provider account", status: "blocked" },
+              { name: "Agent workflow", status: "blocked" }
             ]
           } : connector
         )
       );
-      addWorkflowConnector(activeConnector.key);
     } finally {
       setIsConnecting(false);
     }
@@ -3147,16 +4777,20 @@ function Dashboard({
       current.map((connector) =>
         connector.key === demoAuthConnector.key ? {
           ...connector,
-          connected: true,
-          connectionMode: "demo",
-          connectionMessage: `${connector.provider} connected.`,
+          connected: false,
+          connectionMode: undefined,
+          connectionMessage: "Demo authorization is disabled. Configure a real provider connector before launch.",
           scopes: [],
-          testStatus: "Connected",
-          testChecks: []
+          testStatus: "Setup required",
+          testChecks: [
+            { name: "Authentication", status: "missing" },
+            { name: "Provider account", status: "blocked" },
+            { name: "Agent workflow", status: "blocked" }
+          ]
         } : connector
       )
     );
-    setConnectionStatus(`${demoAuthConnector.provider} connected.`);
+    setConnectionStatus(`${demoAuthConnector.provider} was not connected. Demo authorization is disabled for the agent workflow.`);
     closeDemoAuth();
   };
 
@@ -3181,21 +4815,6 @@ function Dashboard({
   };
 
   const testActiveConnector = async () => {
-    if (activeConnector.connectionMode === "demo") {
-      setConnectors((current) =>
-        current.map((connector) =>
-          connector.key === activeConnector.key ? {
-            ...connector,
-            connectionMessage: `${connector.provider} connected.`,
-            testStatus: "Connected",
-            testChecks: []
-          } : connector
-        )
-      );
-      setConnectionStatus(`${activeConnector.provider} connected.`);
-      return;
-    }
-
     setConnectionStatus(`Testing ${activeConnector.provider}...`);
 
     try {
@@ -3219,8 +4838,7 @@ function Dashboard({
   };
 
   const generateLaunchPack = () => {
-    const systems = connectors
-      .filter((connector) => connector.connected)
+    const systems = realConnectedConnectors
       .map((connector) => connector.name)
       .join(", ");
     const website = websiteUrl.trim() || "Not provided";
@@ -3265,30 +4883,137 @@ function Dashboard({
     });
   };
 
-  const runLaunchTests = () => {
+  const runLaunchTests = async () => {
     clearTestRunTimers();
+    const scenarios = playbook.tests;
+    if (scenarios.length === 0) {
+      return;
+    }
+
+    const runToken = testRunTokenRef.current + 1;
+    testRunTokenRef.current = runToken;
+
     setTestRunState("running");
     setActiveRunIndex(0);
     setCompletedRunCount(0);
     setScenarioIndex(0);
+    setRunningChecks(null);
+    setRevealedCheckCount(0);
+    setRealResults(new Array(scenarios.length).fill(null));
+    setTestMode(null);
 
-    playbook.tests.forEach((_, index) => {
-      const startTimer = window.setTimeout(() => {
-        setActiveRunIndex(index);
-        setScenarioIndex(index);
-      }, index * 1150);
+    const business = {
+      name: confirmedBusinessType.trim() || playbook.label,
+      type: confirmedBusinessType.trim() || playbook.label,
+      context: [playbook.summary, agentKnowledge, ...playbook.customerExamples].filter(Boolean).join("\n"),
+      capabilities: selectedCapabilities,
+      guardrails: playbook.guardrails
+    };
+    const agent = { name: agentName, purpose: agentPurpose, knowledge: agentKnowledge, handoff: agentHandoff };
+    const connectors = realConnectedConnectors.map((connector) => connector.key);
 
-      const completeTimer = window.setTimeout(() => {
-        setCompletedRunCount(index + 1);
+    let resolvedMode: "real" | "simulated" = "simulated";
 
-        if (index === playbook.tests.length - 1) {
-          setTestRunState("complete");
+    for (let index = 0; index < scenarios.length; index += 1) {
+      if (testRunTokenRef.current !== runToken) {
+        return;
+      }
+
+      setActiveRunIndex(index);
+      setScenarioIndex(index);
+
+      const scenario = scenarios[index];
+      const scenarioStartedAt = Date.now();
+      let result: TestScenarioResult;
+
+      try {
+        const apiResult = await fetchJsonFromApi<LaunchTestApiResult>("/api/launch/test", {
+          method: "POST",
+          body: JSON.stringify({
+            scenario: { title: scenario.title, label: scenario.label, result: scenario.result },
+            business,
+            agent,
+            connectors,
+            voiceReady: productionVoiceReady
+          })
+        });
+
+        if (testRunTokenRef.current !== runToken) {
+          return;
         }
-      }, index * 1150 + 880);
 
-      testRunTimers.current.push(startTimer, completeTimer);
-    });
+        resolvedMode = apiResult.mode === "real" ? "real" : resolvedMode;
+        result = {
+          score: apiResult.score,
+          passed: apiResult.passed,
+          result: apiResult.result,
+          checks: apiResult.checks || []
+        };
+      } catch {
+        if (testRunTokenRef.current !== runToken) {
+          return;
+        }
+        result = previewResults[index];
+      }
+
+      const checks = result.checks || [];
+      setRunningChecks(checks);
+      setRevealedCheckCount(0);
+
+      const minScenarioDuration = 5200;
+      const elapsed = Date.now() - scenarioStartedAt;
+      const remaining = Math.max(0, minScenarioDuration - elapsed);
+
+      if (checks.length > 0) {
+        const perCheck = Math.max(700, Math.floor(Math.max(remaining, 2800) / checks.length));
+        for (let checkIndex = 0; checkIndex < checks.length; checkIndex += 1) {
+          setRevealedCheckCount(checkIndex + 1);
+          await new Promise((resolve) => window.setTimeout(resolve, perCheck));
+          if (testRunTokenRef.current !== runToken) {
+            return;
+          }
+        }
+      } else if (remaining > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remaining));
+        if (testRunTokenRef.current !== runToken) {
+          return;
+        }
+      }
+
+      setRealResults((current) => {
+        const next = [...current];
+        next[index] = result;
+        return next;
+      });
+      setCompletedRunCount(index + 1);
+      setRunningChecks(null);
+      setRevealedCheckCount(0);
+    }
+
+    if (testRunTokenRef.current !== runToken) {
+      return;
+    }
+
+    setTestMode(resolvedMode);
+    setTestRunState("complete");
   };
+
+  useEffect(() => {
+    if (step !== 4 || testRunState !== "idle" || !agentsComplete || !productionVoiceReady || !systemsComplete) {
+      return;
+    }
+
+    const autoRunKey = `${playbook.id}::${agentBuildKey}`;
+
+    if (autoStartedTestKeyRef.current === autoRunKey) {
+      return;
+    }
+
+    autoStartedTestKeyRef.current = autoRunKey;
+    const autoRunTimer = window.setTimeout(runLaunchTests, 450);
+
+    return () => window.clearTimeout(autoRunTimer);
+  }, [agentBuildKey, agentsComplete, playbook.id, productionVoiceReady, step, systemsComplete, testRunState]);
 
   const nextStep = () => {
     if (!canContinue) {
@@ -3313,42 +5038,59 @@ function Dashboard({
         ? activeConnector.testStatus
         : `Test ${activeConnector.testStatus}`
       : "Ready to link";
-  const activeTestChecks = activeConnector.connected || activeConnector.connectionMode === "demo" ? [] : activeConnector.testChecks || [];
+  const activeTestChecks = activeConnector.connected ? [] : activeConnector.testChecks || [];
   const primaryKnowledgeSource = playbook.connectorProviders.knowledge || "Knowledge base";
   const crmSystem = playbook.connectorProviders.crm || "CRM";
   const helpdeskSystem = playbook.connectorProviders.helpdesk || "Helpdesk";
   const testProgress = testRunState === "complete" ? 100 : Math.round((completedRunCount / Math.max(1, playbook.tests.length)) * 100);
   const agentDisplayName = agentName.trim() || `${playbook.label} assistant`;
-  const connectedWorkflowConnectors = connectors.filter((connector) => connector.connected);
+  const connectedWorkflowConnectors = realConnectedConnectors;
   const workflowIntegrations = connectors
-    .filter((connector) => connector.connected && ["crm", "knowledge", "helpdesk", "telephony"].includes(connector.key))
+    .filter((connector) => connector.connected && (connector.connectionMode === "oauth" || connector.connectionMode === "sandbox") && ["crm", "knowledge", "helpdesk", "telephony"].includes(connector.key))
     .slice(0, 4);
   const selectedWorkflowSuggestions = selectedCapabilities.slice(0, 5);
+  const selectedVoiceSummary = voiceConfirmed && selectedVoice
+    ? `${selectedVoice.name}, ${selectedVoice.tone.toLowerCase()}`
+    : "Selected caller voice";
+  const connectedSystemSummary = connectedWorkflowConnectors.length
+    ? connectedWorkflowConnectors.map((connector) => connector.provider).join(", ")
+    : "the connected systems";
+  const launchReviewProjectName = workspaceName.trim() || confirmedBusinessType.trim() || `${playbook.label} workspace`;
+  const launchReviewBusinessType = confirmedBusinessType.trim() || playbook.label;
+  const launchReviewScenariosPassed = scenarioResults.filter((result) => result.passed).length;
+  const launchSummaryRows: Array<{ label: string; value: string; hint?: string }> = [
+    { label: "Workspace", value: launchReviewProjectName, hint: launchReviewBusinessType },
+    { label: "Voice", value: voiceConfirmed && selectedVoice ? selectedVoice.name : "Not confirmed", hint: voiceConfirmed && selectedVoice ? selectedVoice.tone : "" },
+    { label: "Connected systems", value: realConnectedConnectors.length ? `${realConnectedConnectors.length} connected` : "None yet", hint: realConnectedConnectors.map((connector) => connector.provider).join(", ") },
+    { label: "Capabilities & goals", value: `${selectedCapabilities.length} capabilities, ${selectedGoals.length} goals` },
+    { label: "Readiness", value: `${readiness}%` },
+    { label: "Launch tests", value: `${launchGateScore}% · ${launchReviewScenariosPassed}/${playbook.tests.length} scenarios` }
+  ];
   const workflowAgents = [
     {
       id: "agentIntake",
       label: "Intake agent",
-      name: agentDisplayName,
+      name: workflowAgentNameEdits.agentIntake || agentDisplayName,
       trigger: "New customer request",
-      job: agentPurpose.trim() || playbook.missions[0],
+      job: `${agentPurpose.trim() || playbook.missions[0]} Answers with ${selectedVoiceSummary} and uses ${connectedSystemSummary}.`,
       connectorKeys: ["crm", "telephony"],
-      outcome: "Captures the request and confirms the next step."
+      outcome: `Captures the request, verifies context, and confirms the next step in ${confirmedWorkspaceName}.`
     },
     {
       id: "agentAnswer",
       label: "Knowledge agent",
-      name: "Answer agent",
+      name: workflowAgentNameEdits.agentAnswer || "Answer agent",
       trigger: "Routine question",
-      job: `Checks ${primaryKnowledgeSource} and customer context.`,
+      job: `Checks ${primaryKnowledgeSource}, selected workspace capabilities, and customer context before answering.`,
       connectorKeys: ["knowledge", "crm"],
-      outcome: "Answers from approved information."
+      outcome: "Answers from approved information with source-aware guardrails."
     },
     {
       id: "agentHandoff",
       label: "Handoff agent",
-      name: "Escalation agent",
+      name: workflowAgentNameEdits.agentHandoff || "Escalation agent",
       trigger: "Sensitive or urgent case",
-      job: agentHandoff.trim() || "Summarises urgent or sensitive requests for the team.",
+      job: `${agentHandoff.trim() || "Summarises urgent or sensitive requests for the team."} Uses ${selectedVoiceSummary} until transfer.`,
       connectorKeys: ["helpdesk", "messaging", "crm"],
       outcome: "Routes the case with summary and context."
     }
@@ -3372,12 +5114,14 @@ function Dashboard({
     ...(extraWorkflowConnectorKeys[activeWorkspaceAgent.id] || [])
   ]));
   const activeWorkspaceConnectors = activeWorkspaceConnectorKeys
-    .map((key) => connectedWorkflowConnectors.find((connector) => connector.key === key))
+    .map((key) => connectors.find((connector) => connector.key === key))
     .filter((connector): connector is Connector => Boolean(connector));
   const activeWorkspaceConnectorNames = activeWorkspaceConnectors.map((connector) => connector.provider).join(", ");
   const activeWorkspaceOutcomeDetail = activeWorkspaceConnectorNames
     ? `Uses ${activeWorkspaceConnectorNames}.`
     : "Connect the required systems before launch.";
+  const activeCustomApps = customApps.filter((app) => app.agentId === activeWorkspaceAgent.id);
+  const activeCustomActions = customActions.filter((action) => action.agentId === activeWorkspaceAgent.id);
   const workflowNodeKey = (nodeId: string) => `${activeWorkspaceAgent.id}:${nodeId}`;
   const workflowNodeContent = {
     trigger: {
@@ -3394,71 +5138,252 @@ function Dashboard({
     }
   };
 
+  const workflowNodeInspector = (nodeId: string): {
+    kind: string;
+    title: string;
+    detail: string;
+    facts: { label: string; value: string; tone?: "ok" | "warn" }[];
+  } | null => {
+    if (nodeId === "systems") {
+      return {
+        kind: "Connected systems",
+        title: "Connected systems",
+        detail: activeWorkspaceConnectors.length
+          ? "The systems this agent can read from and act in while it works."
+          : "No systems connected yet. Connect systems in the previous step to give this agent tools.",
+        facts: activeWorkspaceConnectors.map((connector) => ({
+          label: connector.provider,
+          value: connector.connected ? "Connected" : "Needs connection",
+          tone: connector.connected ? "ok" : "warn"
+        }))
+      };
+    }
+
+    const builtin = (workflowNodeContent as Record<string, { title: string; detail: string }>)[nodeId];
+    if (builtin) {
+      const kind = nodeId === "trigger" ? "Trigger" : nodeId === "instructions" ? "Instructions" : "Outcome";
+      return {
+        kind,
+        title: builtin.title,
+        detail: builtin.detail,
+        facts: [
+          { label: "Agent", value: activeWorkspaceAgent.name },
+          { label: "Role", value: activeWorkspaceAgent.label }
+        ]
+      };
+    }
+
+    const app = activeCustomApps.find((item) => item.id === nodeId);
+    if (app) {
+      return {
+        kind: "App",
+        title: app.name,
+        detail: app.detail,
+        facts: [{ label: "Agent", value: activeWorkspaceAgent.name }]
+      };
+    }
+
+    const action = activeCustomActions.find((item) => item.id === nodeId);
+    if (action) {
+      return {
+        kind: "Action",
+        title: action.name,
+        detail: action.detail,
+        facts: [{ label: "Agent", value: activeWorkspaceAgent.name }]
+      };
+    }
+
+    return null;
+  };
+
+  const inspectedWorkflowNode = inspectedWorkflowNodeId ? workflowNodeInspector(inspectedWorkflowNodeId) : null;
+
   useEffect(() => {
     if (!workspaceAgents.some((agent) => agent.id === selectedWorkflowAgentId)) {
       setSelectedWorkflowAgentId(workspaceAgents[0]?.id || "agentIntake");
     }
   }, [selectedWorkflowAgentId, workspaceAgents]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const board = workflowCanvasRef.current;
 
     if (!board) {
       return;
     }
 
-    const updateBoardSize = () => {
+    const updateWorkflowMeasurements = () => {
       const rect = board.getBoundingClientRect();
       setWorkflowBoardSize({
         width: Math.max(1, Math.round(rect.width)),
         height: Math.max(1, Math.round(rect.height))
       });
+
+      const nextNodeRects = Array.from(board.querySelectorAll<HTMLElement>("[data-workflow-node-id]")).reduce<Record<string, { x: number; y: number; width: number; height: number }>>((rects, node) => {
+        const nodeRect = node.getBoundingClientRect();
+        const nodeId = node.dataset.workflowNodeId;
+
+        if (!nodeId) {
+          return rects;
+        }
+
+        rects[nodeId] = {
+          x: Math.round(nodeRect.left - rect.left),
+          y: Math.round(nodeRect.top - rect.top),
+          width: Math.round(nodeRect.width),
+          height: Math.round(nodeRect.height)
+        };
+
+        return rects;
+      }, {});
+
+      setWorkflowNodeRects(nextNodeRects);
     };
 
-    updateBoardSize();
-    const observer = new ResizeObserver(updateBoardSize);
+    updateWorkflowMeasurements();
+    const frame = window.requestAnimationFrame(updateWorkflowMeasurements);
+    const observer = new ResizeObserver(updateWorkflowMeasurements);
     observer.observe(board);
-    window.addEventListener("resize", updateBoardSize);
+    Array.from(board.querySelectorAll<HTMLElement>("[data-workflow-node-id]")).forEach((node) => observer.observe(node));
+    window.addEventListener("resize", updateWorkflowMeasurements);
 
     return () => {
+      window.cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("resize", updateBoardSize);
+      window.removeEventListener("resize", updateWorkflowMeasurements);
     };
-  }, [step]);
+  }, [step, agentsComplete, selectedWorkflowAgentId, activeCustomApps.length, activeCustomActions.length, activeWorkspaceConnectors.length, workflowNodeEdits]);
 
-  const boardNodeDefaults: Record<string, { x: number; y: number }> = {
-    trigger: { x: 32, y: 118 },
-    instructions: { x: 286, y: 118 },
-    systems: { x: 540, y: 118 },
-    outcome: { x: 794, y: 118 }
+  useEffect(() => {
+    if (!workflowContextMenu) {
+      return;
+    }
+
+    const closeMenu = () => setWorkflowContextMenu(null);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [workflowContextMenu]);
+
+  useEffect(() => {
+    if (!workflowAddPicker) {
+      return;
+    }
+
+    setWorkflowAddTab(0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setWorkflowAddPicker(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [workflowAddPicker]);
+
+  useEffect(() => () => {
+    if (workflowCopyToastTimer.current) {
+      window.clearTimeout(workflowCopyToastTimer.current);
+    }
+  }, []);
+
+  const boardNodeSize = { width: 224, height: 142 };
+  const workflowNodeSize = (nodeId: string) => {
+    if (nodeId === "systems") {
+      return { width: 252, height: 142 };
+    }
+
+    if (nodeId.startsWith("app-") || nodeId.startsWith("action-")) {
+      return { width: 204, height: 124 };
+    }
+
+    return boardNodeSize;
   };
-  const boardNodeSize = { width: 190, height: 136 };
-  const workflowNodePosition = (nodeId: string) => workflowNodeOffsets[workflowNodeKey(nodeId)] || boardNodeDefaults[nodeId] || { x: 32, y: 118 };
+  const workflowDefaultPosition = (nodeId: string) => {
+    const boardWidth = Math.max(720, workflowBoardSize.width || 960);
+    const boardHeight = Math.max(520, workflowBoardSize.height || 620);
+    const laneY = Math.max(108, Math.round(boardHeight * 0.34));
+    const laneMargin = 24;
+    const triggerSize = workflowNodeSize("trigger");
+    const instructionsSize = workflowNodeSize("instructions");
+    const systemsSize = workflowNodeSize("systems");
+    const outcomeSize = workflowNodeSize("outcome");
+    const totalNodeWidth = triggerSize.width + instructionsSize.width + systemsSize.width + outcomeSize.width;
+    const laneGap = Math.max(10, Math.min(180, (boardWidth - laneMargin * 2 - totalNodeWidth) / 3));
+    const laneWidth = totalNodeWidth + laneGap * 3;
+    const laneStartX = Math.max(laneMargin, Math.round((boardWidth - laneWidth) / 2));
+    const instructionsX = Math.round(laneStartX + triggerSize.width + laneGap);
+    const systemsX = Math.round(instructionsX + instructionsSize.width + laneGap);
+    const outcomeX = Math.min(
+      Math.round(systemsX + systemsSize.width + laneGap),
+      Math.max(laneMargin, boardWidth - outcomeSize.width - laneMargin)
+    );
+    const positions: Record<string, { x: number; y: number }> = {
+      trigger: { x: laneStartX, y: laneY },
+      instructions: { x: instructionsX, y: laneY },
+      systems: { x: systemsX, y: laneY },
+      outcome: { x: outcomeX, y: laneY }
+    };
+
+    return positions[nodeId] || { x: 34, y: Math.max(236, Math.round(boardHeight * 0.58)) };
+  };
+  const workflowNodePosition = (nodeId: string) => workflowNodeOffsets[workflowNodeKey(nodeId)] || workflowDefaultPosition(nodeId);
+  const workflowNodeBox = (nodeId: string) => {
+    const position = workflowNodePosition(nodeId);
+    const measuredRect = workflowNodeRects[nodeId];
+
+    if (measuredRect) {
+      return {
+        x: position.x,
+        y: position.y,
+        width: measuredRect.width,
+        height: measuredRect.height
+      };
+    }
+
+    const size = workflowNodeSize(nodeId);
+
+    return { ...position, ...size };
+  };
   const workflowConnectionPairs = [
     ["trigger", "instructions"],
     ["instructions", "systems"],
     ["systems", "outcome"],
-    ...customApps.map((app) => ["systems", app.id]),
-    ...customActions.map((action) => ["systems", action.id]),
-    ...customApps.map((app) => [app.id, "outcome"]),
-    ...customActions.map((action) => [action.id, "outcome"])
+    ...activeCustomApps.map((app) => ["systems", app.id]),
+    ...activeCustomActions.map((action) => ["systems", action.id]),
+    ...activeCustomApps.map((app) => [app.id, "outcome"]),
+    ...activeCustomActions.map((action) => [action.id, "outcome"])
   ];
   const workflowConnections = workflowConnectionPairs.map(([from, to]) => {
-    const fromPosition = workflowNodePosition(from);
-    const toPosition = workflowNodePosition(to);
-    const fromX = fromPosition.x + boardNodeSize.width;
-    const fromY = fromPosition.y + boardNodeSize.height / 2;
-    const toX = toPosition.x;
-    const toY = toPosition.y + boardNodeSize.height / 2;
-    const distance = Math.hypot(toX - fromX, toY - fromY);
-    const connected = distance < 520 && toX > fromPosition.x + 40;
-    const bend = Math.max(44, Math.min(140, Math.abs(toX - fromX) * 0.38));
+    const fromBox = workflowNodeBox(from);
+    const toBox = workflowNodeBox(to);
+    const fromCenterX = fromBox.x + fromBox.width / 2;
+    const toCenterX = toBox.x + toBox.width / 2;
+    const flowsRight = toCenterX >= fromCenterX;
+    const fromX = flowsRight ? fromBox.x + fromBox.width : fromBox.x;
+    const fromY = fromBox.y + fromBox.height / 2;
+    const toX = flowsRight ? toBox.x : toBox.x + toBox.width;
+    const toY = toBox.y + toBox.height / 2;
+    const bend = Math.max(54, Math.min(170, Math.abs(toX - fromX) * 0.42));
 
     return {
       from,
       to,
-      connected,
-      path: `M ${fromX} ${fromY} C ${fromX + bend} ${fromY}, ${toX - bend} ${toY}, ${toX} ${toY}`
+      connected: true,
+      path: `M ${fromX} ${fromY} C ${fromX + (flowsRight ? bend : -bend)} ${fromY}, ${toX - (flowsRight ? bend : -bend)} ${toY}, ${toX} ${toY}`
     };
   });
   const gridSize = 16;
@@ -3562,14 +5487,28 @@ function Dashboard({
       return;
     }
 
-    const currentOffset = workflowNodePosition(nodeId);
+    // Drag the whole marquee selection together when the grabbed node is part of it.
+    const ids = selectedWorkflowNodeIds.includes(nodeId) && selectedWorkflowNodeIds.length > 1
+      ? selectedWorkflowNodeIds
+      : [nodeId];
+
+    if (!selectedWorkflowNodeIds.includes(nodeId)) {
+      setSelectedWorkflowNodeIds([nodeId]);
+    }
+
+    const origins = ids.reduce<Record<string, { x: number; y: number }>>((map, id) => {
+      map[id] = workflowNodePosition(id);
+      return map;
+    }, {});
+
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setActiveWorkflowNodeDrag({
       nodeId,
+      ids,
       startX: event.clientX,
       startY: event.clientY,
-      originX: currentOffset.x,
-      originY: currentOffset.y,
+      origins,
       moved: false
     });
   };
@@ -3584,22 +5523,35 @@ function Dashboard({
       return;
     }
 
-    const deltaX = event.clientX - activeWorkflowNodeDrag.startX;
-    const deltaY = event.clientY - activeWorkflowNodeDrag.startY;
-    const moved = activeWorkflowNodeDrag.moved || Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
-    const maxX = Math.max(24, rect.width - boardNodeSize.width - 24);
-    const maxY = Math.max(24, rect.height - boardNodeSize.height - 24);
-    const x = Math.max(24, Math.min(maxX, Math.round((activeWorkflowNodeDrag.originX + deltaX) / gridSize) * gridSize));
-    const y = Math.max(24, Math.min(maxY, Math.round((activeWorkflowNodeDrag.originY + deltaY) / gridSize) * gridSize));
+    const drag = activeWorkflowNodeDrag;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    const moved = drag.moved || Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
 
-    setWorkflowNodeOffsets((current) => ({
-      ...current,
-      [workflowNodeKey(activeWorkflowNodeDrag.nodeId)]: { x, y }
-    }));
+    setWorkflowNodeOffsets((current) => {
+      const next = { ...current };
+
+      drag.ids.forEach((id) => {
+        const origin = drag.origins[id];
+
+        if (!origin) {
+          return;
+        }
+
+        const nodeSize = workflowNodeSize(id);
+        const maxX = Math.max(24, rect.width - nodeSize.width - 24);
+        const maxY = Math.max(24, rect.height - nodeSize.height - 24);
+        const x = Math.max(24, Math.min(maxX, Math.round((origin.x + deltaX) / gridSize) * gridSize));
+        const y = Math.max(24, Math.min(maxY, Math.round((origin.y + deltaY) / gridSize) * gridSize));
+        next[workflowNodeKey(id)] = { x, y };
+      });
+
+      return next;
+    });
     setActiveWorkflowNodeDrag((current) => current ? { ...current, moved } : current);
   };
 
-  const stopWorkspaceNodeDrag = (event: React.PointerEvent<HTMLElement>, nodeId: "trigger" | "instructions" | "outcome") => {
+  const stopWorkspaceNodeDrag = (event: React.PointerEvent<HTMLElement>, nodeId: string) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -3608,7 +5560,8 @@ function Dashboard({
     setActiveWorkflowNodeDrag(null);
 
     if (!wasMoved) {
-      editWorkflowNode(nodeId);
+      setSelectedWorkflowNodeIds([nodeId]);
+      setInspectedWorkflowNodeId(nodeId);
     }
   };
 
@@ -3618,6 +5571,110 @@ function Dashboard({
       left: offset.x,
       top: offset.y
     };
+  };
+
+  const workflowBoardPoint = (clientX: number, clientY: number) => {
+    const rect = workflowCanvasRef.current?.getBoundingClientRect();
+
+    if (!rect) {
+      return null;
+    }
+
+    return {
+      x: Math.max(0, Math.min(rect.width, clientX - rect.left)),
+      y: Math.max(0, Math.min(rect.height, clientY - rect.top))
+    };
+  };
+
+  const marqueeRect = workflowMarquee ? {
+    x: Math.min(workflowMarquee.startX, workflowMarquee.currentX),
+    y: Math.min(workflowMarquee.startY, workflowMarquee.currentY),
+    width: Math.abs(workflowMarquee.currentX - workflowMarquee.startX),
+    height: Math.abs(workflowMarquee.currentY - workflowMarquee.startY)
+  } : null;
+
+  const marqueeStyle = marqueeRect ? {
+    left: marqueeRect.x,
+    top: marqueeRect.y,
+    width: marqueeRect.width,
+    height: marqueeRect.height
+  } : undefined;
+
+  const nodeIntersectsRect = (
+    nodeRect: { x: number; y: number; width: number; height: number },
+    selectionRect: { x: number; y: number; width: number; height: number }
+  ) => (
+    nodeRect.x < selectionRect.x + selectionRect.width &&
+    nodeRect.x + nodeRect.width > selectionRect.x &&
+    nodeRect.y < selectionRect.y + selectionRect.height &&
+    nodeRect.y + nodeRect.height > selectionRect.y
+  );
+
+  const updateMarqueeSelection = (selectionRect: { x: number; y: number; width: number; height: number }) => {
+    if (selectionRect.width < 8 && selectionRect.height < 8) {
+      setSelectedWorkflowNodeIds([]);
+      return;
+    }
+
+    setSelectedWorkflowNodeIds(Object.entries(workflowNodeRects)
+      .filter(([, nodeRect]) => nodeIntersectsRect(nodeRect, selectionRect))
+      .map(([nodeId]) => nodeId));
+  };
+
+  const startWorkflowMarquee = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button, input, textarea, [data-workflow-node-id], .workflow-context-menu, .workflow-inspector")) {
+      return;
+    }
+
+    const point = workflowBoardPoint(event.clientX, event.clientY);
+
+    if (!point) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setWorkflowContextMenu(null);
+    setWorkflowMarquee({
+      active: true,
+      startX: point.x,
+      startY: point.y,
+      currentX: point.x,
+      currentY: point.y
+    });
+    setSelectedWorkflowNodeIds([]);
+    setInspectedWorkflowNodeId(null);
+  };
+
+  const moveWorkflowMarquee = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!workflowMarquee?.active || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+      return;
+    }
+
+    const point = workflowBoardPoint(event.clientX, event.clientY);
+
+    if (!point) {
+      return;
+    }
+
+    const nextMarquee = { ...workflowMarquee, currentX: point.x, currentY: point.y };
+    const nextRect = {
+      x: Math.min(nextMarquee.startX, nextMarquee.currentX),
+      y: Math.min(nextMarquee.startY, nextMarquee.currentY),
+      width: Math.abs(nextMarquee.currentX - nextMarquee.startX),
+      height: Math.abs(nextMarquee.currentY - nextMarquee.startY)
+    };
+
+    setWorkflowMarquee(nextMarquee);
+    updateMarqueeSelection(nextRect);
+  };
+
+  const stopWorkflowMarquee = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    setWorkflowMarquee(null);
   };
 
   const addWorkflowConnector = (connectorKey: string) => {
@@ -3648,9 +5705,12 @@ function Dashboard({
     };
   };
 
-  const startDrawerDrag = (event: React.DragEvent<HTMLElement>, payload: Record<string, string>) => {
-    event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData("application/x-relay-workflow", JSON.stringify(payload));
+  const cancelWorkspaceNodeDrag = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    setActiveWorkflowNodeDrag(null);
   };
 
   const dropWorkflowDrawerItem = (event: React.DragEvent<HTMLDivElement>) => {
@@ -3681,6 +5741,396 @@ function Dashboard({
     } catch {
       return;
     }
+  };
+
+  const openWorkflowContextMenu = (
+    event: React.MouseEvent<HTMLElement>,
+    target: "board" | "node" | "agent",
+    detail: { nodeId?: string; agentId?: string } = {}
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Right-clicking a node that is not already part of the marquee selection narrows to just it,
+    // so the menu's copy/duplicate/delete act on what the user is pointing at.
+    if (target === "node" && detail.nodeId && !selectedWorkflowNodeIds.includes(detail.nodeId)) {
+      setSelectedWorkflowNodeIds([detail.nodeId]);
+    }
+
+    setWorkflowContextMenu({
+      x: Math.min(event.clientX, window.innerWidth - 236),
+      y: Math.min(event.clientY, window.innerHeight - 260),
+      target,
+      ...detail
+    });
+  };
+
+  const workflowNodeTitle = (nodeId: string) => {
+    if (nodeId === "trigger" || nodeId === "instructions" || nodeId === "outcome") {
+      return workflowNodeContent[nodeId].title;
+    }
+
+    if (nodeId === "systems") {
+      return "Connected systems";
+    }
+
+    return activeCustomApps.find((app) => app.id === nodeId)?.name ||
+      activeCustomActions.find((action) => action.id === nodeId)?.name ||
+      "Workflow node";
+  };
+
+  const showWorkflowCopyToast = () => {
+    setWorkflowCopyToast(true);
+    if (workflowCopyToastTimer.current) {
+      window.clearTimeout(workflowCopyToastTimer.current);
+    }
+    workflowCopyToastTimer.current = window.setTimeout(() => setWorkflowCopyToast(false), 1600);
+  };
+
+  const copyWorkflowText = async (text: string) => {
+    const value = text.trim();
+
+    if (!value) {
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const helper = document.createElement("textarea");
+        helper.value = value;
+        helper.setAttribute("readonly", "");
+        helper.style.position = "fixed";
+        helper.style.opacity = "0";
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand("copy");
+        document.body.removeChild(helper);
+      }
+    } catch {
+      return;
+    }
+
+    showWorkflowCopyToast();
+  };
+
+  const workflowAgentClipboardText = (agentId: string) => {
+    const agent = workspaceAgents.find((item) => item.id === agentId);
+
+    if (!agent) {
+      return "";
+    }
+
+    const systems = Array.from(new Set([
+      ...agent.connectorKeys,
+      ...(extraWorkflowConnectorKeys[agent.id] || [])
+    ]))
+      .map((key) => connectors.find((connector) => connector.key === key)?.provider)
+      .filter(Boolean)
+      .join(", ");
+
+    return [
+      agent.name,
+      "",
+      agent.job,
+      "",
+      `Trigger: ${agent.trigger}`,
+      `Outcome: ${agent.outcome}`,
+      `Connected systems: ${systems || "None connected yet"}`
+    ].join("\n");
+  };
+
+  const workflowNodeClipboardText = (nodeId: string) => {
+    const builtin = (workflowNodeContent as Record<string, { title: string; detail: string }>)[nodeId];
+
+    if (builtin) {
+      return `${builtin.title}\n\n${builtin.detail}`;
+    }
+
+    if (nodeId === "systems") {
+      return `Connected systems\n\n${activeWorkspaceConnectorNames || "No systems connected yet."}`;
+    }
+
+    const app = activeCustomApps.find((item) => item.id === nodeId);
+
+    if (app) {
+      return `${app.name}\n\n${app.detail}`;
+    }
+
+    const action = activeCustomActions.find((item) => item.id === nodeId);
+
+    if (action) {
+      return `${action.name}\n\n${action.detail}`;
+    }
+
+    return workflowNodeTitle(nodeId);
+  };
+
+  const renameWorkflowAgent = (agentId: string) => {
+    const agent = workspaceAgents.find((item) => item.id === agentId);
+
+    if (!agent) {
+      return;
+    }
+
+    const nextName = window.prompt("Rename agent", agent.name);
+
+    if (nextName === null) {
+      return;
+    }
+
+    const trimmedName = nextName.trim();
+
+    if (!trimmedName) {
+      return;
+    }
+
+    setWorkflowAgentNameEdits((current) => ({ ...current, [agentId]: trimmedName }));
+    setCustomAgents((current) => current.map((item) => item.id === agentId ? { ...item, name: trimmedName } : item));
+  };
+
+  const renameWorkflowDynamicNode = (nodeId: string) => {
+    const app = activeCustomApps.find((item) => item.id === nodeId);
+    const action = activeCustomActions.find((item) => item.id === nodeId);
+    const current = app || action;
+
+    if (!current) {
+      return;
+    }
+
+    const nextTitle = window.prompt("Rename node", current.name);
+
+    if (nextTitle === null) {
+      return;
+    }
+
+    const nextDetail = window.prompt("Edit detail", current.detail);
+
+    if (nextDetail === null) {
+      return;
+    }
+
+    if (app) {
+      setCustomApps((items) => items.map((item) => item.id === nodeId ? {
+        ...item,
+        name: nextTitle.trim() || item.name,
+        detail: nextDetail.trim() || item.detail
+      } : item));
+      return;
+    }
+
+    setCustomActions((items) => items.map((item) => item.id === nodeId ? {
+      ...item,
+      name: nextTitle.trim() || item.name,
+      detail: nextDetail.trim() || item.detail
+    } : item));
+  };
+
+  const renameWorkflowNode = (nodeId: string) => {
+    if (nodeId === "trigger" || nodeId === "instructions" || nodeId === "outcome") {
+      editWorkflowNode(nodeId);
+      return;
+    }
+
+    renameWorkflowDynamicNode(nodeId);
+  };
+
+  const deleteWorkflowNode = (nodeId: string) => {
+    setCustomApps((items) => items.filter((item) => item.id !== nodeId));
+    setCustomActions((items) => items.filter((item) => item.id !== nodeId));
+    setWorkflowNodeOffsets((items) => {
+      const next = { ...items };
+      delete next[workflowNodeKey(nodeId)];
+      return next;
+    });
+    setSelectedWorkflowNodeIds((items) => items.filter((item) => item !== nodeId));
+    setInspectedWorkflowNodeId((current) => (current === nodeId ? null : current));
+  };
+
+  const duplicateWorkflowNode = (nodeId: string) => {
+    const offset = workflowNodePosition(nodeId);
+    const position = { x: offset.x + 32, y: offset.y + 32 };
+    const app = activeCustomApps.find((item) => item.id === nodeId);
+    const action = activeCustomActions.find((item) => item.id === nodeId);
+
+    if (app) {
+      const id = `app-${Date.now()}`;
+      setCustomApps((items) => [...items, { ...app, id }]);
+      setWorkflowNodeOffsets((items) => ({ ...items, [workflowNodeKey(id)]: position }));
+      setSelectedWorkflowNodeIds([id]);
+      return;
+    }
+
+    if (action) {
+      const id = `action-${Date.now()}`;
+      setCustomActions((items) => [...items, { ...action, id }]);
+      setWorkflowNodeOffsets((items) => ({ ...items, [workflowNodeKey(id)]: position }));
+      setSelectedWorkflowNodeIds([id]);
+      return;
+    }
+
+    copyWorkflowText(workflowNodeTitle(nodeId));
+  };
+
+  // Custom (app/action) nodes are the only ones that can be removed, copied, or pasted.
+  const selectedCustomNodeIds = selectedWorkflowNodeIds.filter((id) => id.startsWith("app-") || id.startsWith("action-"));
+
+  const deleteWorkflowSelection = () => {
+    if (!selectedCustomNodeIds.length) {
+      return;
+    }
+
+    const removing = new Set(selectedCustomNodeIds);
+    setCustomApps((items) => items.filter((item) => !removing.has(item.id)));
+    setCustomActions((items) => items.filter((item) => !removing.has(item.id)));
+    setWorkflowNodeOffsets((items) => {
+      const next = { ...items };
+      removing.forEach((id) => delete next[workflowNodeKey(id)]);
+      return next;
+    });
+    setSelectedWorkflowNodeIds((items) => items.filter((id) => !removing.has(id)));
+    setInspectedWorkflowNodeId((current) => (current && removing.has(current) ? null : current));
+  };
+
+  const copyWorkflowSelection = () => {
+    if (!selectedWorkflowNodeIds.length) {
+      return;
+    }
+
+    const clipboard = selectedWorkflowNodeIds.reduce<typeof workflowClipboard>((items, id) => {
+      const position = workflowNodePosition(id);
+      const app = activeCustomApps.find((item) => item.id === id);
+
+      if (app) {
+        items.push({ kind: "app", name: app.name, detail: app.detail, x: position.x, y: position.y });
+        return items;
+      }
+
+      const action = activeCustomActions.find((item) => item.id === id);
+
+      if (action) {
+        items.push({ kind: "action", name: action.name, detail: action.detail, x: position.x, y: position.y });
+      }
+
+      return items;
+    }, []);
+
+    setWorkflowClipboard(clipboard);
+    const text = selectedWorkflowNodeIds
+      .map((id) => workflowNodeClipboardText(id))
+      .filter(Boolean)
+      .join("\n\n———\n\n");
+    copyWorkflowText(text);
+  };
+
+  const duplicateWorkflowSelection = () => {
+    if (!selectedCustomNodeIds.length) {
+      duplicateWorkflowNode(selectedWorkflowNodeIds[0] || "");
+      return;
+    }
+
+    const stamp = Date.now();
+    const appsToAdd: typeof customApps = [];
+    const actionsToAdd: typeof customActions = [];
+    const offsetsToAdd: Record<string, { x: number; y: number }> = {};
+    const newIds: string[] = [];
+
+    selectedCustomNodeIds.forEach((nodeId, index) => {
+      const offset = workflowNodePosition(nodeId);
+      const position = { x: offset.x + 32, y: offset.y + 32 };
+      const app = activeCustomApps.find((item) => item.id === nodeId);
+
+      if (app) {
+        const id = `app-${stamp}-${index}`;
+        appsToAdd.push({ ...app, id });
+        offsetsToAdd[workflowNodeKey(id)] = position;
+        newIds.push(id);
+        return;
+      }
+
+      const action = activeCustomActions.find((item) => item.id === nodeId);
+
+      if (action) {
+        const id = `action-${stamp}-${index}`;
+        actionsToAdd.push({ ...action, id });
+        offsetsToAdd[workflowNodeKey(id)] = position;
+        newIds.push(id);
+      }
+    });
+
+    if (appsToAdd.length) {
+      setCustomApps((items) => [...items, ...appsToAdd]);
+    }
+    if (actionsToAdd.length) {
+      setCustomActions((items) => [...items, ...actionsToAdd]);
+    }
+    setWorkflowNodeOffsets((items) => ({ ...items, ...offsetsToAdd }));
+    setSelectedWorkflowNodeIds(newIds);
+  };
+
+  const pasteWorkflowClipboard = () => {
+    if (!workflowClipboard.length) {
+      return;
+    }
+
+    const stamp = Date.now();
+    const appsToAdd: typeof customApps = [];
+    const actionsToAdd: typeof customActions = [];
+    const offsetsToAdd: Record<string, { x: number; y: number }> = {};
+    const newIds: string[] = [];
+
+    workflowClipboard.forEach((item, index) => {
+      const position = { x: item.x + 32, y: item.y + 32 };
+
+      if (item.kind === "app") {
+        const id = `app-${stamp}-${index}`;
+        appsToAdd.push({ id, agentId: activeWorkspaceAgent.id, name: item.name, detail: item.detail });
+        offsetsToAdd[workflowNodeKey(id)] = position;
+        newIds.push(id);
+        return;
+      }
+
+      const id = `action-${stamp}-${index}`;
+      actionsToAdd.push({ id, agentId: activeWorkspaceAgent.id, name: item.name, detail: item.detail });
+      offsetsToAdd[workflowNodeKey(id)] = position;
+      newIds.push(id);
+    });
+
+    if (appsToAdd.length) {
+      setCustomApps((items) => [...items, ...appsToAdd]);
+    }
+    if (actionsToAdd.length) {
+      setCustomActions((items) => [...items, ...actionsToAdd]);
+    }
+    setWorkflowNodeOffsets((items) => ({ ...items, ...offsetsToAdd }));
+    // Cascade the clipboard so a repeated paste keeps drifting instead of stacking.
+    setWorkflowClipboard((items) => items.map((item) => ({ ...item, x: item.x + 32, y: item.y + 32 })));
+    setSelectedWorkflowNodeIds(newIds);
+  };
+
+  const duplicateWorkflowAgent = (agentId: string) => {
+    const agent = workspaceAgents.find((item) => item.id === agentId);
+
+    if (!agent) {
+      return;
+    }
+
+    const id = `agent-${Date.now()}`;
+    setCustomAgents((items) => [...items, {
+      id,
+      name: `${agent.name} copy`,
+      job: agent.job
+    }]);
+    setSelectedWorkflowAgentId(id);
+  };
+
+  const resetWorkflowLayout = () => {
+    setWorkflowNodeOffsets((current) => {
+      const prefix = `${activeWorkspaceAgent.id}:`;
+      return Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(prefix)));
+    });
+    setSelectedWorkflowNodeIds([]);
   };
 
   const deleteWorkflowAgent = (agentId: string) => {
@@ -3720,116 +6170,314 @@ function Dashboard({
     const availableConnectors = connectedWorkflowConnectors.length ? connectedWorkflowConnectors : workflowIntegrations;
     const nextConnector = connectorKey
       ? availableConnectors.find((connector) => connector.key === connectorKey)
-      : availableConnectors[(customApps.length + workflowIntegrations.length) % Math.max(1, availableConnectors.length)];
+      : availableConnectors[(activeCustomApps.length + workflowIntegrations.length) % Math.max(1, availableConnectors.length)];
 
     if (!nextConnector) {
       return;
     }
 
     const id = `app-${Date.now()}`;
-    const defaultPosition = { x: 554 + (customApps.length % 2) * 96, y: 248 + Math.floor(customApps.length / 2) * 48 };
+    const defaultPosition = { x: 554 + (activeCustomApps.length % 2) * 104, y: 272 + Math.floor(activeCustomApps.length / 2) * 72 };
     setCustomApps((current) => [...current, {
       id,
+      agentId: activeWorkspaceAgent.id,
       name: nextConnector.provider,
       detail: nextConnector.name
     }]);
     setWorkflowNodeOffsets((current) => ({ ...current, [workflowNodeKey(id)]: position || defaultPosition }));
   };
 
-  const addWorkflowAction = (position?: { x: number; y: number }) => {
-    const id = `action-${Date.now()}`;
-    const action = playbook.actions[(customActions.length + 1) % playbook.actions.length] || "New workflow action";
-    const defaultPosition = { x: 794, y: 260 + customActions.length * 48 };
-    setCustomActions((current) => [...current, { id, name: action, detail: "Configure this action" }]);
-    setWorkflowNodeOffsets((current) => ({ ...current, [workflowNodeKey(id)]: position || defaultPosition }));
-  };
+  const addCustomWorkflowApp = (name: string, detail = "Configure this app", position?: { x: number; y: number }) => {
+    const appName = name.trim();
 
-  const generateVoicePreview = async (voice = selectedVoice, textToRead = previewText) => {
-    const text = textToRead.trim();
-    const requestId = voicePreviewRequestRef.current + 1;
-    voicePreviewRequestRef.current = requestId;
-
-    if (!text) {
-      setVoicePreviewStatus("Add a short line for the voice to read.");
+    if (!appName) {
       return;
     }
 
-    setIsPreviewingVoice(true);
-    setVoicePreviewCompleted(false);
-    setVoicePreviewStatus(`Generating ${voice.name} preview...`);
+    const id = `app-${Date.now()}`;
+    const defaultPosition = { x: 554 + (activeCustomApps.length % 2) * 104, y: 272 + Math.floor(activeCustomApps.length / 2) * 72 };
+    setCustomApps((current) => [...current, { id, agentId: activeWorkspaceAgent.id, name: appName, detail }]);
+    setWorkflowNodeOffsets((current) => ({ ...current, [workflowNodeKey(id)]: position || defaultPosition }));
+  };
+
+  const addWorkflowAction = (position?: { x: number; y: number }, actionName?: string, actionDetail?: string) => {
+    const id = `action-${Date.now()}`;
+    const action = actionName?.trim() || playbook.actions[(activeCustomActions.length + 1) % playbook.actions.length] || "New workflow action";
+    const detail = actionDetail?.trim() || "Configure this action";
+    const defaultPosition = { x: 794, y: 272 + activeCustomActions.length * 72 };
+    setCustomActions((current) => [...current, { id, agentId: activeWorkspaceAgent.id, name: action, detail }]);
+    setWorkflowNodeOffsets((current) => ({ ...current, [workflowNodeKey(id)]: position || defaultPosition }));
+  };
+
+  // Apps the "Add an app" modal offers: connected systems first, then the full integration catalog.
+  const connectedWorkflowAppList = connectedWorkflowConnectors.length ? connectedWorkflowConnectors : workflowIntegrations;
+  const workflowAppCatalog = setupIntegrationCategories.map((category) => ({
+    label: category.label,
+    apps: setupAddIntegrationCatalog[category.id]
+  }));
+  // Actions the "Add an action" modal offers: business recommendations first, then the full library.
+  const workflowActionGroups = [
+    {
+      category: `Recommended for ${confirmedBusinessType || playbook.label}`,
+      actions: playbook.actions.map((name) => ({ name, detail: "Recommended for your business." }))
+    },
+    ...WORKFLOW_ACTION_LIBRARY
+  ];
+  // Tabbed panels so the modal never has to scroll: one category per tab.
+  const workflowAppPanels = [
+    ...(connectedWorkflowAppList.length ? [{ tab: "Connected", title: "Connected systems", connected: true, apps: connectedWorkflowAppList }] : []),
+    ...workflowAppCatalog.map((group) => ({ tab: group.label, title: group.label, connected: false, apps: group.apps }))
+  ];
+  const workflowActionPanels = [
+    ...workflowActionGroups.map((group, index) => ({
+      tab: index === 0 ? "Recommended" : group.category.split(" ")[0],
+      title: group.category,
+      actions: group.actions
+    })),
+    { tab: "Custom", title: "Custom action", actions: null as null | Array<{ name: string; detail: string }> }
+  ];
+  const workflowAddPanelCount = workflowAddPicker === "app" ? workflowAppPanels.length : workflowActionPanels.length;
+  const safeWorkflowAddTab = Math.min(workflowAddTab, Math.max(0, workflowAddPanelCount - 1));
+
+  const playVoicePreview = (voice: VoicePreset) => {
+    setVoicePreviewCompleted(true);
+    setPlayingVoiceId(voice.id);
+    setActiveAudioUrl(voice.previewAudioUrl);
+    setVoicePreviewStatus(`${voice.name} preview is playing.`);
+    window.setTimeout(() => {
+      const audio = audioRef.current;
+
+      if (!audio) {
+        setPlayingVoiceId("");
+        setVoicePreviewStatus("Preview audio is not ready yet.");
+        return;
+      }
+
+      audio.src = voice.previewAudioUrl;
+      audio.load();
+      audio.play().catch(() => {
+        setPlayingVoiceId("");
+        setVoicePreviewStatus("Preview is ready. Press play in the audio control.");
+      });
+    }, 0);
+  };
+
+  const primeVoicePlayback = () => {
+    const audio = audioRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    audio.muted = true;
+    audio.loop = true;
+    audio.src = SILENT_AUDIO_URL;
+    audio.load();
+    audio.play().catch(() => undefined);
+  };
+
+  const playGeneratedVoiceAudio = async (audioUrl: string, voice: VoicePreset) => {
+    const audio = audioRef.current;
+
+    if (!audio) {
+      setPlayingVoiceId("");
+      setVoicePreviewStatus("Preview audio is not ready yet.");
+      return;
+    }
+
+    audio.loop = false;
+    audio.muted = false;
+    audio.src = audioUrl;
+    audio.load();
+    setActiveAudioUrl(audioUrl);
+    setPlayingVoiceId(voice.id);
+
+    try {
+      await audio.play();
+      setVoicePreviewStatus(`${voice.name} preview is playing.`);
+    } catch {
+      setPlayingVoiceId("");
+      setVoicePreviewStatus("Voice is ready. Press Play.");
+    }
+  };
+
+  const stopVoicePrime = () => {
+    const audio = audioRef.current;
+
+    if (!audio || !audio.muted) {
+      return;
+    }
+
+    audio.pause();
+    audio.loop = false;
+    audio.muted = false;
+  };
+
+  const updateVoicePreview = async () => {
+    if (!selectedVoice) {
+      setVoicePreviewStatus("Choose a voice before previewing settings.");
+      return;
+    }
+
+    if (isRegeneratingVoice) {
+      return;
+    }
+
+    setIsRegeneratingVoice(true);
+    setVoicePreviewStatus(`Playing ${selectedVoice.name} with the current settings.`);
+
+    if (generatedAudioUrlRef.current && generatedVoiceSettingsKeyRef.current === voiceSettingsKey) {
+      const audio = audioRef.current;
+
+      if (!audio) {
+        setPlayingVoiceId("");
+        setVoicePreviewStatus("Preview audio is not ready yet.");
+        setIsRegeneratingVoice(false);
+        return;
+      }
+
+      audio.muted = false;
+      await playGeneratedVoiceAudio(generatedAudioUrlRef.current, selectedVoice);
+      setIsRegeneratingVoice(false);
+      return;
+    }
+
+    if (voiceGenerationCount >= VOICE_GENERATION_LIMIT) {
+      setIsRegeneratingVoice(false);
+      setVoicePreviewStatus("Voice preview limit reached for this setup.");
+      return;
+    }
+
+    primeVoicePlayback();
 
     try {
       const payload = await fetchJsonFromApi<SpeechPayload>("/api/voice/speech", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text,
-          voiceId: voice.voiceId,
-          modelId: "eleven_multilingual_v2",
+          text: voiceIntroLine,
+          voiceId: selectedVoice.voiceId,
           speed: voiceSpeed,
           stability: voiceStability / 100,
-          similarityBoost: 0.78,
-          style: voiceStyle / 100
-        })
+          similarityBoost: voiceSimilarity / 100,
+          style: voiceStyle / 100,
+          useSpeakerBoost: voiceSpeakerBoost,
+        }),
       });
 
-      if (requestId !== voicePreviewRequestRef.current) {
-        return;
-      }
-
       if (payload.mode === "audio" && payload.audioBase64) {
-        const binary = window.atob(payload.audioBase64);
-        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        if (generatedAudioUrlRef.current) {
+          URL.revokeObjectURL(generatedAudioUrlRef.current);
+        }
+
+        const bytes = Uint8Array.from(atob(payload.audioBase64), (character) => character.charCodeAt(0));
         const audioUrl = URL.createObjectURL(new Blob([bytes], { type: payload.contentType || "audio/mpeg" }));
-
-        setActiveAudioUrl((currentUrl) => {
-          if (currentUrl) {
-            URL.revokeObjectURL(currentUrl);
-          }
-
-          return audioUrl;
-        });
+        generatedAudioUrlRef.current = audioUrl;
+        generatedVoiceSettingsKeyRef.current = voiceSettingsKey;
+        setRealVoicePreviewKey(voiceSettingsKey);
+        setVoiceGenerationCount((current) => current + 1);
         setVoicePreviewCompleted(true);
-        setVoicePreviewStatus(`${voice.name} preview is playing.`);
-        window.setTimeout(() => {
-          audioRef.current?.play().catch(() => setVoicePreviewStatus("Preview generated. Press play in the audio control."));
-        }, 0);
-        return;
+        await playGeneratedVoiceAudio(audioUrl, selectedVoice);
+      } else {
+        setPlayingVoiceId("");
+        stopVoicePrime();
+        generatedVoiceSettingsKeyRef.current = "";
+        setRealVoicePreviewKey("");
+        setVoicePreviewStatus(payload.message || "Connect ElevenLabs to play this voice with the current settings.");
       }
-
-      setVoicePreviewCompleted(false);
-      setVoicePreviewStatus(payload.message || "ElevenLabs preview is unavailable. Add an API key to hear this voice.");
     } catch (error) {
-      if (requestId !== voicePreviewRequestRef.current) {
-        return;
-      }
-
-      setVoicePreviewCompleted(false);
-      setVoicePreviewStatus(error instanceof Error ? error.message : "ElevenLabs preview failed.");
+      stopVoicePrime();
+      setVoicePreviewStatus(error instanceof Error ? error.message : "Unable to preview these voice settings.");
     } finally {
-      if (requestId === voicePreviewRequestRef.current) {
-        setIsPreviewingVoice(false);
-      }
+      setIsRegeneratingVoice(false);
     }
   };
 
   const selectVoice = (voice: VoicePreset) => {
-    setSelectedVoiceId(voice.id);
-    setConfirmedVoiceId("");
-    setPreviewText(voiceIntroLine);
-    generateVoicePreview(voice, voiceIntroLine);
-  };
-
-  const confirmVoice = () => {
-    if (!voicePreviewCompleted) {
-      setVoicePreviewStatus("Listen to the ElevenLabs preview before confirming this voice.");
+    if (voiceConfirmed) {
       return;
     }
 
-    setConfirmedVoiceId(selectedVoice.id);
-    setVoicePreviewStatus(`${selectedVoice.name} is confirmed.`);
-    setStep(4);
+    setSelectedVoiceId(voice.id);
+    setConfirmedVoiceId((current) => current === voice.id ? current : "");
+    setVoiceGenerationCount(0);
+    setRealVoicePreviewKey("");
+    setPlayingVoiceId("");
+    setVoicePreviewCompleted(false);
+    setActiveAudioUrl("");
+    setVoicePreviewStatus(`${voice.name} is selected. Confirm this voice or play a preview if you want to hear it first.`);
   };
+
+  const confirmVoice = (voice?: VoicePreset) => {
+    const voiceToConfirm = voice || selectedVoice;
+
+    if (!voiceToConfirm) {
+      setVoicePreviewStatus("Choose a voice before confirming.");
+      return;
+    }
+
+    setSelectedVoiceId(voiceToConfirm.id);
+    setConfirmedVoiceId(voiceToConfirm.id);
+    setVoicePreviewCompleted(true);
+    setVoicePreviewStatus(`${voiceToConfirm.name} is selected. You can tune the settings or play a preview if needed.`);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (generatedAudioUrlRef.current) {
+        URL.revokeObjectURL(generatedAudioUrlRef.current);
+      }
+    };
+  }, []);
+
+  // Keyboard shortcuts for the workflow board: delete / copy / paste / duplicate the current selection.
+  useEffect(() => {
+    if (step !== 3) {
+      return;
+    }
+
+    const handleWorkflowKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+
+      if (target && (target.closest("input, textarea, select, [contenteditable='true']") || target.isContentEditable)) {
+        return;
+      }
+
+      const accel = event.metaKey || event.ctrlKey;
+
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedCustomNodeIds.length) {
+        event.preventDefault();
+        deleteWorkflowSelection();
+        return;
+      }
+
+      if (accel && (event.key === "c" || event.key === "C") && selectedWorkflowNodeIds.length) {
+        event.preventDefault();
+        copyWorkflowSelection();
+        return;
+      }
+
+      if (accel && (event.key === "v" || event.key === "V") && workflowClipboard.length) {
+        event.preventDefault();
+        pasteWorkflowClipboard();
+        return;
+      }
+
+      if (accel && (event.key === "d" || event.key === "D") && selectedCustomNodeIds.length) {
+        event.preventDefault();
+        duplicateWorkflowSelection();
+        return;
+      }
+
+      if (event.key === "Escape" && selectedWorkflowNodeIds.length) {
+        setSelectedWorkflowNodeIds([]);
+        setInspectedWorkflowNodeId(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleWorkflowKey);
+
+    return () => window.removeEventListener("keydown", handleWorkflowKey);
+  }, [step, selectedWorkflowNodeIds, selectedCustomNodeIds, workflowClipboard, activeCustomApps, activeCustomActions, activeWorkspaceAgent.id]);
 
   return (
     <main className="onboarding-shell">
@@ -3949,56 +6597,98 @@ function Dashboard({
 	                          animate={{ opacity: 1, y: 0, scale: 1 }}
 	                          transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1] }}
 	                        >
-	                          <div className="workspace-confirmation-hero">
-	                            <div>
-	                              <span>Step 1 setup</span>
-	                              <strong>Choose what the AI agent should do first.</strong>
-	                              <p>
-	                                Start with the conversation skills your {confirmedBusinessLabel} team needs most. Select one capability or combine several into the first launch scope.
-	                              </p>
-	                            </div>
-	                            <b>{selectedZoomCapabilityCount} of {zoomAiCapabilities.length} selected</b>
-	                          </div>
-	                          <div className="workspace-capability-sections" aria-label="Select Zoom AI capabilities">
-	                            {groupedZoomAiCapabilities.map((group, groupIndex) => {
-	                              const precedingCount = groupedZoomAiCapabilities
-	                                .slice(0, groupIndex)
-	                                .reduce((total, currentGroup) => total + currentGroup.items.length, 0);
+	                          <div className="workspace-capability-builder" aria-label="Select Zoom AI capabilities">
+	                            <nav className="workspace-capability-rail" aria-label="Capability categories">
+	                              {groupedZoomAiCapabilities.map((group) => {
+	                                const selectedInGroup = group.items.filter((goal) => selectedCapabilities.includes(goal.title)).length;
+	                                const isActiveGroup = group.title === activeCapabilityGroup?.title;
 
-	                              return (
-	                                <section className="workspace-capability-section" key={group.title}>
-	                                  <div className="workspace-capability-heading">
-	                                    <div>
-	                                      <strong>{group.title}</strong>
-	                                    </div>
-	                                  </div>
-	                                  <div className="workspace-confirmation-grid">
-	                                    {group.items.map((goal, itemIndex) => {
-	                                      const capabilityIndex = precedingCount + itemIndex;
+	                                return (
+	                                  <button
+	                                    className={isActiveGroup ? "is-active" : ""}
+	                                    type="button"
+	                                    aria-current={isActiveGroup ? "step" : undefined}
+	                                    onClick={() => {
+	                                      setActiveCapabilityCategory(group.title);
+	                                      setFocusedCapabilityTitle(group.items[0]?.title || "");
+	                                    }}
+	                                    key={group.title}
+	                                  >
+	                                    <span>{group.title}</span>
+	                                    <strong>{selectedInGroup ? `${selectedInGroup} selected` : `${group.items.length} choices`}</strong>
+	                                  </button>
+	                                );
+	                              })}
+	                            </nav>
+
+	                            <section className="workspace-capability-stage" aria-label={activeCapabilityGroup?.title || "Capabilities"}>
+	                              <AnimatePresence mode="wait">
+	                                <motion.div
+	                                  className="workspace-capability-stage-inner"
+	                                  key={activeCapabilityGroup?.title || "capabilities"}
+	                                  initial={{ opacity: 0, x: 18, filter: "blur(8px)" }}
+	                                  animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+	                                  exit={{ opacity: 0, x: -14, filter: "blur(6px)" }}
+	                                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+	                                >
+	                                  <div className="workspace-capability-choice-list">
+	                                    {activeCapabilityGroup?.items.map((goal, itemIndex) => {
+	                                      const isCapabilitySelected = selectedCapabilities.includes(goal.title);
+	                                      const isCapabilityFocused = focusedCapability?.title === goal.title;
 
 	                                      return (
 	                                        <motion.button
-	                                          className={`workspace-confirmation-card ${selectedCapabilities.includes(goal.title) ? "is-selected" : ""}`}
+	                                          className={[
+	                                            "workspace-capability-choice",
+	                                            isCapabilitySelected ? "is-selected" : "",
+	                                            isCapabilityFocused ? "is-focused" : ""
+	                                          ].filter(Boolean).join(" ")}
 	                                          type="button"
-	                                          aria-pressed={selectedCapabilities.includes(goal.title)}
-	                                          onClick={() => toggleCapability(goal.title)}
-	                                          initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
-	                                          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-	                                          transition={{ delay: 0.24 + capabilityIndex * 0.08, duration: 0.72, ease: [0.16, 1, 0.3, 1] }}
+	                                          aria-pressed={isCapabilitySelected}
+	                                          onMouseEnter={() => setFocusedCapabilityTitle(goal.title)}
+	                                          onFocus={() => setFocusedCapabilityTitle(goal.title)}
+	                                          onClick={() => {
+	                                            setFocusedCapabilityTitle(goal.title);
+	                                            toggleCapability(goal.title);
+	                                          }}
+	                                          initial={{ opacity: 0, y: 16 }}
+	                                          animate={{ opacity: 1, y: 0 }}
+	                                          transition={{ delay: itemIndex * 0.035, duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
 	                                          key={goal.title}
 	                                        >
-	                                          <span className="workspace-card-topline">
-	                                            <small>{selectedCapabilities.includes(goal.title) ? "Selected" : "Select"}</small>
-	                                          </span>
-	                                          <strong>{goal.title}</strong>
-	                                          <p>{goal.detail}</p>
+	                                          <span className="workspace-capability-choice-mark" aria-hidden="true" />
+	                                          <div className="workspace-capability-choice-text">
+	                                            <strong>{goal.title}</strong>
+	                                            <small>{goal.detail}</small>
+	                                          </div>
 	                                        </motion.button>
 	                                      );
 	                                    })}
 	                                  </div>
-	                                </section>
-	                              );
-	                            })}
+	                                </motion.div>
+	                              </AnimatePresence>
+	                            </section>
+
+	                            <aside className="workspace-capability-preview" aria-label="Capability preview and selected scope">
+	                              <div className="workspace-capability-preview-main">
+	                                <header className="workspace-capability-preview-head">
+	                                  <span>What this does</span>
+	                                  <strong>{focusedCapability?.title || "Pick a capability"}</strong>
+	                                  <p>{focusedCapability?.detail || "Hover any capability to see what it does before you add it."}</p>
+	                                </header>
+	                                <div className="workspace-capability-preview-bullets">
+	                                  <span>How it helps</span>
+	                                  <ul>
+	                                    {simpleCapabilityBullets(focusedCapability).map((bullet) => (
+	                                      <li key={bullet.title}>
+	                                        <strong>{bullet.title}</strong>
+	                                        <span>{bullet.detail}</span>
+	                                      </li>
+	                                    ))}
+	                                  </ul>
+	                                </div>
+	                              </div>
+	                            </aside>
 	                          </div>
 	                        </motion.div>
 	                      ) : null}
@@ -4152,9 +6842,44 @@ function Dashboard({
                     ) : null}
                   </AnimatePresence>
 
-                  {step === 2 ? (
+                  {step === 3 ? (
                     <div className="agent-step">
-                      <section className="agent-workflow-panel" aria-label="Agent workflow builder">
+                      {!agentsComplete ? (
+                        <motion.section
+                          className="agent-build-panel"
+                          aria-live="polite"
+                          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -12, scale: 0.98 }}
+                          transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <div className="agent-build-visual" aria-hidden="true">
+                            <div className="agent-build-core">
+                              <span className="agent-build-orbit"></span>
+                              <span className="agent-build-orbit agent-build-orbit-inner"></span>
+                              <b className="agent-build-logo"></b>
+                            </div>
+                          </div>
+                          <div className="agent-build-copy">
+                            <span>Building agent workspace</span>
+                            <strong>Preparing {confirmedWorkspaceName}.</strong>
+                            <p>Bringing your capabilities, systems, and {selectedVoice?.name || "chosen"} voice together into your first workflow.</p>
+                          </div>
+                          <div className="agent-build-checks" aria-label="Agent build progress">
+                            <span className={agentBuildStepClass(0)}><b>Workspace</b><small>{confirmedBusinessType || playbook.label}</small></span>
+                            <span className={agentBuildStepClass(1)}><b>Systems</b><small>{connectedCount} connected</small></span>
+                            <span className={agentBuildStepClass(2)}><b>Voice</b><small>{selectedVoice?.name || "Selected voice"}</small></span>
+                            <span className={agentBuildStepClass(3)}><b>Workflow</b><small>{selectedZoomCapabilityCount} capabilities</small></span>
+                          </div>
+                        </motion.section>
+                      ) : (
+                      <motion.section
+                        className="agent-workflow-panel"
+                        aria-label="Agent workflow builder"
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                      >
                         <div className="agent-workflow-canvas">
                           <div className="workflow-ide-shell">
                             <aside className="workflow-agent-sidebar" aria-label="Agents">
@@ -4163,7 +6888,7 @@ function Dashboard({
                                   <span>Agents</span>
                                   <strong>{workspaceAgents.length}</strong>
                                 </div>
-                                <button type="button" onClick={addWorkflowAgent}>+ Add</button>
+                                <button type="button" className="workflow-sidebar-add" onClick={addWorkflowAgent}><span aria-hidden="true">+</span> Add</button>
                               </div>
                               <div className="workflow-agent-nav">
                                 {workspaceAgents.map((agent) => (
@@ -4173,18 +6898,20 @@ function Dashboard({
                                       activeWorkspaceAgent.id === agent.id ? "is-active" : "",
                                       reviewedAgentIds.includes(agent.id) ? "is-reviewed" : ""
                                     ].filter(Boolean).join(" ")}
+                                    onContextMenu={(event) => openWorkflowContextMenu(event, "agent", { agentId: agent.id })}
                                     key={agent.id}
                                   >
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setSelectedWorkflowAgentId(agent.id);
+                                        setInspectedWorkflowNodeId(null);
                                         setReviewedAgentIds((current) => current.includes(agent.id) ? current : [...current, agent.id]);
                                       }}
                                     >
                                       <span>{agent.label}</span>
                                       <strong>{agent.name}</strong>
-                                      <small>{agent.trigger}</small>
+                                      <small>{agent.job}</small>
                                     </button>
                                     <button
                                       className="workflow-agent-delete"
@@ -4206,37 +6933,97 @@ function Dashboard({
                                   <strong>{activeWorkspaceAgent.name}</strong>
                                 </div>
                                 <div className="workflow-toolbar" aria-label="Workspace tools">
-                                  <button type="button" onClick={() => addWorkflowAction()}>+ Action</button>
-                                  <button type="button" onClick={addWorkflowAgent}>+ Agent</button>
+                                  <button
+                                    type="button"
+                                    className="workflow-toolbar-button"
+                                    onClick={() => setWorkflowAddPicker("app")}
+                                    disabled={!connectedWorkflowConnectors.length && !workflowIntegrations.length}
+                                  >
+                                    <span aria-hidden="true">+</span> App
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="workflow-toolbar-button"
+                                    onClick={() => setWorkflowAddPicker("action")}
+                                  >
+                                    <span aria-hidden="true">+</span> Action
+                                  </button>
+                                  <button type="button" className="workflow-toolbar-button is-primary" onClick={addWorkflowAgent}>
+                                    <span aria-hidden="true">+</span> Agent
+                                  </button>
                                 </div>
                               </div>
                               <div
                                 className="workflow-workspace-board"
                                 ref={workflowCanvasRef}
+                                onContextMenu={(event) => openWorkflowContextMenu(event, "board")}
+                                onPointerDown={startWorkflowMarquee}
+                                onPointerMove={moveWorkflowMarquee}
+                                onPointerUp={stopWorkflowMarquee}
+                                onPointerCancel={stopWorkflowMarquee}
                                 onDragOver={(event) => {
                                   event.preventDefault();
                                   event.dataTransfer.dropEffect = "copy";
                                 }}
                                 onDrop={dropWorkflowDrawerItem}
                               >
-                                <div className="workflow-background-tools" aria-label="Connected apps">
-                                  {connectedWorkflowConnectors.map((connector) => (
-                                    <button
-                                      type="button"
-                                      draggable
-                                      onDragStart={(event) => startDrawerDrag(event, { type: "app", connectorKey: connector.key })}
-                                      onClick={() => {
-                                        addWorkflowConnector(connector.key);
-                                        addWorkflowApp(connector.key);
-                                      }}
-                                      key={connector.key}
-                                    >
-                                      <ProviderLogo connector={connector} />
-                                      <span>{connector.provider}</span>
-                                    </button>
-                                  ))}
-                                  {!connectedWorkflowConnectors.length ? <span>Connect apps in the previous step to place them here.</span> : null}
-                                </div>
+                                <div className="workflow-board-hint" aria-hidden="true">Drag the cards to arrange your flow · right-click for more</div>
+                                {workflowContextMenu ? createPortal(
+                                  <div
+                                    className="workflow-context-menu"
+                                    style={{ left: workflowContextMenu.x, top: workflowContextMenu.y }}
+                                    role="menu"
+                                    aria-label="Workspace editor menu"
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onContextMenu={(event) => event.preventDefault()}
+                                  >
+                                    <span>
+                                      {workflowContextMenu.target === "agent"
+                                        ? "Agent"
+                                        : workflowContextMenu.target === "node"
+                                          ? workflowNodeTitle(workflowContextMenu.nodeId || "")
+                                          : "Workspace"}
+                                    </span>
+                                    {workflowContextMenu.target === "board" ? (
+                                      <>
+                                        <button type="button" role="menuitem" onClick={() => { addWorkflowAction(boardDropPosition(workflowContextMenu.x, workflowContextMenu.y)); setWorkflowContextMenu(null); }}>Add action</button>
+                                        <button type="button" role="menuitem" onClick={() => { addWorkflowAgent(); setWorkflowContextMenu(null); }}>Add agent</button>
+                                        <button type="button" role="menuitem" onClick={() => { if (connectedWorkflowConnectors[0]) { addWorkflowConnector(connectedWorkflowConnectors[0].key); addWorkflowApp(connectedWorkflowConnectors[0].key, boardDropPosition(workflowContextMenu.x, workflowContextMenu.y)); } setWorkflowContextMenu(null); }} disabled={!connectedWorkflowConnectors.length}>Add app</button>
+                                        <button type="button" role="menuitem" onClick={() => { pasteWorkflowClipboard(); setWorkflowContextMenu(null); }} disabled={!workflowClipboard.length}>Paste<small>⌘V</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { resetWorkflowLayout(); setWorkflowContextMenu(null); }}>Reset layout</button>
+                                      </>
+                                    ) : null}
+                                    {workflowContextMenu.target === "agent" && workflowContextMenu.agentId ? (
+                                      <>
+                                        <button type="button" role="menuitem" onClick={() => { setSelectedWorkflowAgentId(workflowContextMenu.agentId!); setWorkflowContextMenu(null); }}>Open<small>↵</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { renameWorkflowAgent(workflowContextMenu.agentId!); setWorkflowContextMenu(null); }}>Rename<small>F2</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { copyWorkflowText(workflowAgentClipboardText(workflowContextMenu.agentId!)); setWorkflowContextMenu(null); }}>Copy<small>⌘C</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { duplicateWorkflowAgent(workflowContextMenu.agentId!); setWorkflowContextMenu(null); }}>Duplicate<small>⌘D</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { deleteWorkflowAgent(workflowContextMenu.agentId!); setWorkflowContextMenu(null); }} disabled={workspaceAgents.length <= 1}>Delete<small>⌫</small></button>
+                                      </>
+                                    ) : null}
+                                    {workflowContextMenu.target === "node" && workflowContextMenu.nodeId ? (
+                                      <>
+                                        {selectedWorkflowNodeIds.length > 1 ? (
+                                          <small className="workflow-context-count">{selectedWorkflowNodeIds.length} selected</small>
+                                        ) : null}
+                                        <button type="button" role="menuitem" onClick={() => { setSelectedWorkflowNodeIds([workflowContextMenu.nodeId!]); setInspectedWorkflowNodeId(workflowContextMenu.nodeId!); setWorkflowContextMenu(null); }}>Details<small>↵</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { renameWorkflowNode(workflowContextMenu.nodeId!); setWorkflowContextMenu(null); }} disabled={workflowContextMenu.nodeId === "systems" || selectedWorkflowNodeIds.length > 1}>Rename<small>F2</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { copyWorkflowSelection(); setWorkflowContextMenu(null); }}>Copy<small>⌘C</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { pasteWorkflowClipboard(); setWorkflowContextMenu(null); }} disabled={!workflowClipboard.length}>Paste<small>⌘V</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { duplicateWorkflowSelection(); setWorkflowContextMenu(null); }} disabled={!selectedCustomNodeIds.length}>Duplicate<small>⌘D</small></button>
+                                        <button type="button" role="menuitem" onClick={() => { deleteWorkflowSelection(); setWorkflowContextMenu(null); }} disabled={!selectedCustomNodeIds.length}>Delete<small>⌫</small></button>
+                                      </>
+                                    ) : null}
+                                  </div>,
+                                  document.getElementById("root") || document.body
+                                ) : null}
+                                {workflowCopyToast ? createPortal(
+                                  <div className="workflow-copy-toast" role="status">Copied to clipboard</div>,
+                                  document.getElementById("root") || document.body
+                                ) : null}
+                                {marqueeStyle ? <div className="workflow-selection-marquee" style={marqueeStyle} aria-hidden="true" /> : null}
                                 <svg
                                   className="workflow-connection-layer"
                                   viewBox={`0 0 ${workflowBoardSize.width} ${workflowBoardSize.height}`}
@@ -4251,11 +7038,15 @@ function Dashboard({
                                   ))}
                                 </svg>
                                 <article
-                                  className="workflow-node workflow-trigger"
+                                  className={`workflow-node workflow-trigger ${selectedWorkflowNodeIds.includes("trigger") ? "is-selected" : ""}`}
+                                  data-workflow-node-id="trigger"
                                   style={workflowNodeOffsetStyle("trigger")}
+                                  onContextMenu={(event) => openWorkflowContextMenu(event, "node", { nodeId: "trigger" })}
                                   onPointerDown={(event) => startWorkspaceNodeDrag("trigger", event)}
                                   onPointerMove={moveWorkspaceNodeDrag}
                                   onPointerUp={(event) => stopWorkspaceNodeDrag(event, "trigger")}
+                                  onPointerCancel={cancelWorkspaceNodeDrag}
+                                  onLostPointerCapture={() => setActiveWorkflowNodeDrag(null)}
                                   tabIndex={0}
                                 >
                                   <b>Trigger</b>
@@ -4263,11 +7054,15 @@ function Dashboard({
                                   <p>{workflowNodeContent.trigger.detail}</p>
                                 </article>
                                 <article
-                                  className="workflow-node workflow-agent"
+                                  className={`workflow-node workflow-agent ${selectedWorkflowNodeIds.includes("instructions") ? "is-selected" : ""}`}
+                                  data-workflow-node-id="instructions"
                                   style={workflowNodeOffsetStyle("instructions")}
+                                  onContextMenu={(event) => openWorkflowContextMenu(event, "node", { nodeId: "instructions" })}
                                   onPointerDown={(event) => startWorkspaceNodeDrag("instructions", event)}
                                   onPointerMove={moveWorkspaceNodeDrag}
                                   onPointerUp={(event) => stopWorkspaceNodeDrag(event, "instructions")}
+                                  onPointerCancel={cancelWorkspaceNodeDrag}
+                                  onLostPointerCapture={() => setActiveWorkflowNodeDrag(null)}
                                   tabIndex={0}
                                 >
                                   <b>Instructions</b>
@@ -4275,22 +7070,21 @@ function Dashboard({
                                   <p>{workflowNodeContent.instructions.detail}</p>
                                 </article>
                                 <div
-                                  className="workflow-tool-panel"
+                                  className={`workflow-tool-panel ${selectedWorkflowNodeIds.includes("systems") ? "is-selected" : ""}`}
+                                  data-workflow-node-id="systems"
                                   aria-label={`${activeWorkspaceAgent.label} connected systems`}
                                   style={workflowNodeOffsetStyle("systems")}
+                                  onContextMenu={(event) => openWorkflowContextMenu(event, "node", { nodeId: "systems" })}
                                   onPointerDown={(event) => startWorkspaceNodeDrag("systems", event)}
                                   onPointerMove={moveWorkspaceNodeDrag}
-                                  onPointerUp={(event) => {
-                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                      event.currentTarget.releasePointerCapture(event.pointerId);
-                                    }
-                                    setActiveWorkflowNodeDrag(null);
-                                  }}
+                                  onPointerUp={(event) => stopWorkspaceNodeDrag(event, "systems")}
+                                  onPointerCancel={cancelWorkspaceNodeDrag}
+                                  onLostPointerCapture={() => setActiveWorkflowNodeDrag(null)}
                                 >
                                   <b>Connected systems</b>
                                   <div>
                                     {activeWorkspaceConnectors.map((connector) => (
-                                      <span className="workflow-system-chip" key={connector.key}>
+                                      <span className={`workflow-system-chip ${connector.connected ? "is-connected" : "is-required"}`} title={connector.provider} key={connector.key}>
                                         <ProviderLogo connector={connector} />
                                         <em>{connector.provider}</em>
                                       </span>
@@ -4303,29 +7097,32 @@ function Dashboard({
                                   </div>
                                 </div>
                                 <article
-                                  className="workflow-node workflow-action-a"
+                                  className={`workflow-node workflow-action-a ${selectedWorkflowNodeIds.includes("outcome") ? "is-selected" : ""}`}
+                                  data-workflow-node-id="outcome"
                                   style={workflowNodeOffsetStyle("outcome")}
+                                  onContextMenu={(event) => openWorkflowContextMenu(event, "node", { nodeId: "outcome" })}
                                   onPointerDown={(event) => startWorkspaceNodeDrag("outcome", event)}
                                   onPointerMove={moveWorkspaceNodeDrag}
                                   onPointerUp={(event) => stopWorkspaceNodeDrag(event, "outcome")}
+                                  onPointerCancel={cancelWorkspaceNodeDrag}
+                                  onLostPointerCapture={() => setActiveWorkflowNodeDrag(null)}
                                   tabIndex={0}
                                 >
                                   <b>Outcome</b>
                                   <strong>{workflowNodeContent.outcome.title}</strong>
                                   <p>{workflowNodeContent.outcome.detail}</p>
                                 </article>
-                                {customApps.map((app) => (
+                                {activeCustomApps.map((app) => (
                                   <article
-                                    className="workflow-node workflow-board-app"
+                                    className={`workflow-node workflow-board-app ${selectedWorkflowNodeIds.includes(app.id) ? "is-selected" : ""}`}
+                                    data-workflow-node-id={app.id}
                                     style={workflowNodeOffsetStyle(app.id)}
+                                    onContextMenu={(event) => openWorkflowContextMenu(event, "node", { nodeId: app.id })}
                                     onPointerDown={(event) => startWorkspaceNodeDrag(app.id, event)}
                                     onPointerMove={moveWorkspaceNodeDrag}
-                                    onPointerUp={(event) => {
-                                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                        event.currentTarget.releasePointerCapture(event.pointerId);
-                                      }
-                                      setActiveWorkflowNodeDrag(null);
-                                    }}
+                                    onPointerUp={(event) => stopWorkspaceNodeDrag(event, app.id)}
+                                    onPointerCancel={cancelWorkspaceNodeDrag}
+                                    onLostPointerCapture={() => setActiveWorkflowNodeDrag(null)}
                                     key={app.id}
                                   >
                                     <b>App</b>
@@ -4333,18 +7130,17 @@ function Dashboard({
                                     <p>{app.detail}</p>
                                   </article>
                                 ))}
-                                {customActions.map((action) => (
+                                {activeCustomActions.map((action) => (
                                   <article
-                                    className="workflow-node workflow-board-action"
+                                    className={`workflow-node workflow-board-action ${selectedWorkflowNodeIds.includes(action.id) ? "is-selected" : ""}`}
+                                    data-workflow-node-id={action.id}
                                     style={workflowNodeOffsetStyle(action.id)}
+                                    onContextMenu={(event) => openWorkflowContextMenu(event, "node", { nodeId: action.id })}
                                     onPointerDown={(event) => startWorkspaceNodeDrag(action.id, event)}
                                     onPointerMove={moveWorkspaceNodeDrag}
-                                    onPointerUp={(event) => {
-                                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                        event.currentTarget.releasePointerCapture(event.pointerId);
-                                      }
-                                      setActiveWorkflowNodeDrag(null);
-                                    }}
+                                    onPointerUp={(event) => stopWorkspaceNodeDrag(event, action.id)}
+                                    onPointerCancel={cancelWorkspaceNodeDrag}
+                                    onLostPointerCapture={() => setActiveWorkflowNodeDrag(null)}
                                     key={action.id}
                                   >
                                     <b>Action</b>
@@ -4352,77 +7148,236 @@ function Dashboard({
                                     <p>{action.detail}</p>
                                   </article>
                                 ))}
+                                {inspectedWorkflowNode ? (
+                                  <aside
+                                    className="workflow-inspector"
+                                    aria-label={`${inspectedWorkflowNode.title} details`}
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                  >
+                                    <header className="workflow-inspector-head">
+                                      <div>
+                                        <span>{inspectedWorkflowNode.kind}</span>
+                                        <strong>{inspectedWorkflowNode.title}</strong>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="workflow-inspector-close"
+                                        aria-label="Close details"
+                                        onClick={() => {
+                                          setInspectedWorkflowNodeId(null);
+                                          setSelectedWorkflowNodeIds([]);
+                                        }}
+                                      >
+                                        ×
+                                      </button>
+                                    </header>
+                                    <p className="workflow-inspector-detail">{inspectedWorkflowNode.detail}</p>
+                                    {inspectedWorkflowNode.facts.length ? (
+                                      <dl className="workflow-inspector-facts">
+                                        {inspectedWorkflowNode.facts.map((fact) => (
+                                          <div key={`${fact.label}-${fact.value}`} data-tone={fact.tone || "neutral"}>
+                                            <dt>{fact.label}</dt>
+                                            <dd>{fact.value}</dd>
+                                          </div>
+                                        ))}
+                                      </dl>
+                                    ) : null}
+                                  </aside>
+                                ) : null}
                               </div>
                             </section>
                           </div>
                         </div>
-                      </section>
+                      </motion.section>
+                      )}
                     </div>
                   ) : null}
 
-                  {step === 3 ? (
-                    <div className="voice-step">
+                  {step === 2 ? (
+                    <div className={`voice-step ${voiceConfirmed ? "is-confirmed-layout" : ""}`}>
                       <motion.section
                         className="voice-lab"
                         initial={{ opacity: 0, y: 18, scale: 0.99 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                       >
-                        <div className="voice-lab-top">
-                          <div>
-                            <span>Step 4</span>
-                            <strong>Pick your voice.</strong>
-                          </div>
-                          <b>{isPreviewingVoice ? "Playing sample" : voicePreviewCompleted ? `${selectedVoice.name} selected` : "Choose a voice"}</b>
-                        </div>
-
-                        <div className="voice-lab-grid">
-                          <section className="voice-rail" aria-label="Choose a voice agent">
-                            {elevenLabsVoices.map((voice, index) => (
-                              <motion.button
+                        <div className="voice-face-stage">
+                          <section className="voice-face-grid" aria-label="Choose a voice agent">
+                            <AnimatePresence mode="popLayout">
+                            {(voiceConfirmed && selectedVoice ? [selectedVoice] : elevenLabsVoices).map((voice, index) => (
+                              <motion.article
                                 className={[
-                                  voice.id === selectedVoice.id ? "is-active" : "",
+                                  "voice-face-card",
+                                  selectedVoiceId === voice.id ? "is-active" : "",
+                                  playingVoiceId === voice.id ? "is-playing" : "",
                                   confirmedVoiceId === voice.id ? "is-confirmed" : ""
                                 ].filter(Boolean).join(" ")}
-                                type="button"
-                                onClick={() => selectVoice(voice)}
+                                role={voiceConfirmed ? "img" : "button"}
+                                tabIndex={voiceConfirmed ? -1 : 0}
+                                onClick={() => {
+                                  if (!voiceConfirmed) {
+                                    selectVoice(voice);
+                                  }
+                                }}
+                                onDoubleClick={() => {
+                                  if (!voiceConfirmed) {
+                                    confirmVoice(voice);
+                                  }
+                                }}
+                                onKeyDown={(event) => {
+                                  if (voiceConfirmed) {
+                                    return;
+                                  }
+
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    selectVoice(voice);
+                                  }
+                                }}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.28, delay: index * 0.04 }}
+                                exit={{ opacity: 0, y: 24, scale: 0.92 }}
+                                layout
+                                transition={{ duration: voiceConfirmed ? 0.48 : 0.28, delay: voiceConfirmed ? 0 : index * 0.04, ease: [0.22, 1, 0.36, 1] }}
                                 key={voice.id}
                               >
-                                <span aria-hidden="true"></span>
-                                <div>
+                                <img src={voice.imageUrl} alt={`${voice.name}, ${voice.role} voice agent`} />
+                                <span className="voice-face-play" aria-hidden="true">
+                                  <i></i>
+                                  <i></i>
+                                  <i></i>
+                                </span>
+                                <div className="voice-face-copy">
                                   <strong>{voice.name}</strong>
                                   <small>{voice.tone}</small>
                                 </div>
-                              </motion.button>
+                                <AnimatePresence initial={false}>
+                                  {!voiceConfirmed && selectedVoiceId === voice.id ? (
+                                    <motion.span
+                                      className="voice-confirm-overlay"
+                                      initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          confirmVoice(voice);
+                                        }}
+                                      >
+                                        <span>{confirmedVoiceId === voice.id ? "Selected voice" : "Double-click or press"}</span>
+                                        <strong>{confirmedVoiceId === voice.id ? `${voice.name} confirmed` : `Confirm ${voice.name}`}</strong>
+                                      </button>
+                                    </motion.span>
+                                  ) : null}
+                                </AnimatePresence>
+                              </motion.article>
                             ))}
+                            </AnimatePresence>
                           </section>
 
-                          <section className="voice-console" aria-label={`${selectedVoice.name} voice preview`}>
-                            <div className={`voice-signal ${isPreviewingVoice ? "is-loading" : ""}`}>
-                              <span aria-hidden="true"></span>
-                              <div>
-                                <strong>{isPreviewingVoice ? `Playing ${selectedVoice.name}` : voicePreviewCompleted ? `${selectedVoice.name} sounds good.` : "Select a voice to hear it."}</strong>
-                                <small>{voicePreviewStatus}</small>
-                              </div>
-                            </div>
+                          <AnimatePresence>
+                            {voiceConfirmed && selectedVoice ? (
+                              <motion.section
+                                className="voice-settings-drop"
+                                aria-label={`${selectedVoice.name} voice settings`}
+                                initial={{ opacity: 0, y: -28, height: 0 }}
+                                animate={{ opacity: 1, y: 0, height: "auto" }}
+                                exit={{ opacity: 0, y: -18, height: 0 }}
+                                transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
+                              >
+                                <div className="voice-settings-heading">
+                                  <span>Voice setup</span>
+                                  <strong>{selectedVoice.name} is ready for tuning.</strong>
+                                  <p>{voicePreviewStatus}</p>
+                                </div>
+                                <div className="voice-settings-grid">
+                                  <label>
+                                    <span>Speed</span>
+                                    <strong>{voiceSpeed.toFixed(2)}x</strong>
+                                    <input
+                                      type="range"
+                                      min="0.7"
+                                      max="1.2"
+                                      step="0.01"
+                                      value={voiceSpeed}
+                                      onChange={(event) => setVoiceSpeed(Number(event.target.value))}
+                                    />
+                                  </label>
+                                  <label>
+                                    <span>Stability</span>
+                                    <strong>{voiceStability}%</strong>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="100"
+                                      value={voiceStability}
+                                      onChange={(event) => setVoiceStability(Number(event.target.value))}
+                                    />
+                                  </label>
+                                  <label>
+                                    <span>Clarity</span>
+                                    <strong>{voiceSimilarity}%</strong>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="100"
+                                      value={voiceSimilarity}
+                                      onChange={(event) => setVoiceSimilarity(Number(event.target.value))}
+                                    />
+                                  </label>
+                                  <label>
+                                    <span>Style</span>
+                                    <strong>{voiceStyle}%</strong>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="100"
+                                      value={voiceStyle}
+                                      onChange={(event) => setVoiceStyle(Number(event.target.value))}
+                                    />
+                                  </label>
+                                  <label className="voice-toggle-setting">
+                                    <span>Speaker boost</span>
+                                    <strong>{voiceSpeakerBoost ? "On" : "Off"}</strong>
+                                    <input
+                                      type="checkbox"
+                                      checked={voiceSpeakerBoost}
+                                      onChange={(event) => setVoiceSpeakerBoost(event.target.checked)}
+                                    />
+                                  </label>
+                                </div>
+                                <div className="voice-settings-summary">
+                                  <div>
+                                    <span>Preview</span>
+                                    <strong>Hear this voice</strong>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={updateVoicePreview}
+                                    disabled={isRegeneratingVoice}
+                                  >
+                                    {isRegeneratingVoice
+                                      ? "Playing..."
+                                      : "Play"}
+                                  </button>
+                                </div>
+                              </motion.section>
+                            ) : null}
+                          </AnimatePresence>
 
-                            <div className="voice-playback">
-                              {activeAudioUrl ? <audio ref={audioRef} src={activeAudioUrl} controls /> : <audio ref={audioRef} controls />}
-                            </div>
+                          <audio
+                            ref={audioRef}
+                            src={activeAudioUrl || undefined}
+                            preload="auto"
+                            onPlay={() => setPlayingVoiceId(selectedVoiceId)}
+                            onPause={() => setPlayingVoiceId("")}
+                            onEnded={() => setPlayingVoiceId("")}
+                            hidden
+                          />
 
-                            <div className="voice-confirm-panel">
-                              <div>
-                                <span>Selected voice</span>
-                                <strong>{selectedVoice.name}</strong>
-                              </div>
-                              <button type="button" onClick={confirmVoice} disabled={isPreviewingVoice || !voicePreviewCompleted}>
-                                Confirm voice
-                              </button>
-                            </div>
-                          </section>
                         </div>
                       </motion.section>
                     </div>
@@ -4430,128 +7385,256 @@ function Dashboard({
 
                   {step === 4 ? (
                     <div className="test-step">
-                      <div className="premium-test-grid">
-                        {playbook.tests.map((scenario, index) => (
-                          <button
-                            className={[
-                              scenarioIndex === index ? "is-active" : "",
-                              testRunState === "running" && activeRunIndex === index ? "is-running" : "",
-                              completedRunCount > index ? "is-complete" : ""
-                            ].filter(Boolean).join(" ")}
-                            type="button"
-                            onClick={() => {
-                              setScenarioIndex(index);
-                              if (testRunState !== "running") {
-                                setActiveRunIndex(index);
-                              }
-                            }}
-                            key={scenario.title}
-                          >
-                            <span>{scenario.label}</span>
-                            <strong>{scenario.title}</strong>
-                            <small>{completedRunCount > index ? "Passed" : testRunState === "running" && activeRunIndex === index ? "Running" : "Queued"}</small>
+                      <motion.section
+                        className="launch-tests"
+                        data-state={testRunState}
+                        aria-live="polite"
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <header className="launch-tests-head">
+                          <div className="launch-tests-heading">
+                            <span>
+                              Launch tests
+                              {testMode === "simulated" ? " · Simulated (no AI key)" : testMode === "real" ? " · Live agent eval" : ""}
+                            </span>
+                            <strong>
+                              {testRunState === "complete"
+                                ? testsPassed ? "Ready to launch" : "Needs setup"
+                                : testRunState === "running" ? "Testing in progress" : "Auto-starting"}
+                            </strong>
+                            <p>
+                              {testRunState === "complete"
+                                ? testsPassed
+                                  ? "Every caller scenario passed. You're clear to launch."
+                                  : "Some scenarios need setup before this agent can launch."
+                                : testRunState === "running"
+                                  ? `Running scenario ${Math.min(completedRunCount + 1, playbook.tests.length)} of ${playbook.tests.length}.`
+                                  : "Tests start automatically and check the agent against real caller scenarios."}
+                            </p>
+                          </div>
+                          <button className="launch-tests-run" type="button" onClick={runLaunchTests} disabled={testRunState === "running"}>
+                            {testRunState === "running" ? "Running…" : testRunState === "complete" ? "Run again" : "Run tests"}
                           </button>
-                        ))}
-                      </div>
+                        </header>
 
-                      <section className={`test-run-panel ${testRunState === "running" ? "is-running" : ""} ${testRunState === "complete" ? "is-complete" : ""}`} aria-live="polite">
-                        <div className="test-run-main">
-                          <div className="test-run-header">
-                            <div>
-                              <span>{testRunState === "complete" ? "Launch gate passed" : testRunState === "running" ? "Live evaluation" : "Evaluation ready"}</span>
-                              <strong>{testRunState === "running" ? selectedScenario.title : "Run caller scenario tests"}</strong>
-                            </div>
-                            <button className="test-run-button" type="button" onClick={runLaunchTests} disabled={testRunState === "running"}>
-                              {testRunState === "running" ? "Running" : testRunState === "complete" ? "Run again" : "Run tests"}
-                            </button>
-                          </div>
-
-                          <div className="test-engine-strip" aria-label="Evaluation checks">
-                            <span className={testRunState === "running" ? "is-active" : testRunState === "complete" ? "is-complete" : ""}>
-                              <b>Call path</b>
-                              {testRunState === "running" ? selectedScenario.label : "Ready"}
-                            </span>
-                            <span className={completedRunCount > 0 ? "is-complete" : ""}>
-                              <b>Handoff</b>
-                              {completedRunCount > 0 ? "Checked" : "Queued"}
-                            </span>
-                            <span className={testRunState === "complete" ? "is-complete" : ""}>
-                              <b>Guardrails</b>
-                              {testRunState === "complete" ? "Passed" : "Queued"}
-                            </span>
-                          </div>
-
-                          <div className="test-live-line" aria-hidden="true">
-                            <i style={{ width: `${testProgress}%` }} />
-                          </div>
-
-                          <div className="test-check-stream">
-                            {playbook.tests.map((scenario, index) => (
-                              <div
-                                className={[
-                                  completedRunCount > index ? "is-complete" : "",
-                                  testRunState === "running" && activeRunIndex === index ? "is-active" : ""
-                                ].filter(Boolean).join(" ")}
-                                key={scenario.title}
-                              >
-                                <b>{index + 1}</b>
-                                <span>{scenario.label}</span>
-                                <strong>{completedRunCount > index ? `${scenario.score}%` : testRunState === "running" && activeRunIndex === index ? "Checking" : "Queued"}</strong>
-                              </div>
-                            ))}
-                          </div>
+                        <div className="launch-tests-stats">
+                          <article data-tone={launchGateScore >= 90 ? "pass" : "idle"}>
+                            <span>Launch score</span>
+                            <strong>{launchGateScore}%</strong>
+                            <small>{launchGateScore >= 90 ? "Meets launch threshold" : "90% required to launch"}</small>
+                          </article>
+                          <article>
+                            <span>Scenarios passed</span>
+                            <strong>
+                              {scenarioResults.slice(0, completedRunCount).filter((result) => result.passed).length}
+                              <i>/ {playbook.tests.length}</i>
+                            </strong>
+                            <small>{testRunState === "complete" ? "Run complete" : testRunState === "running" ? "Evaluating…" : "Not started"}</small>
+                          </article>
+                          <article data-tone={testRunState === "complete" ? (testsPassed ? "pass" : "warn") : "idle"}>
+                            <span>Status</span>
+                            <strong>{testRunState === "complete" ? (testsPassed ? "Passed" : "Action needed") : testRunState === "running" ? "Testing" : "Queued"}</strong>
+                            <small>{testRunState === "running" ? `${testProgress}% complete` : `${playbook.tests.length} caller scenarios`}</small>
+                          </article>
                         </div>
 
-                        <aside className="test-score">
-                          <span>{testRunState === "complete" ? "Launch score" : "Projected score"}</span>
-                          <strong>{testRunState === "complete" ? launchGateScore : selectedScenario.score}%</strong>
-                          <small>{testRunState === "complete" ? scoreLabel(launchGateScore) : `${Math.max(0, completedRunCount)} of ${playbook.tests.length} complete`}</small>
-                        </aside>
-                      </section>
+                        <div
+                          className="launch-tests-bar"
+                          role="progressbar"
+                          aria-valuenow={testProgress}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label="Launch test progress"
+                        >
+                          <i style={{ width: `${testProgress}%` }} />
+                        </div>
+
+                        <div className="launch-tests-body">
+                          <ol className="launch-tests-list" aria-label="Caller scenarios">
+                            {playbook.tests.map((scenario, index) => {
+                              const isCurrent = testRunState === "running" && activeRunIndex === index;
+                              const isDone = completedRunCount > index;
+                              const result = scenarioResults[index];
+                              const status = isDone ? (result?.passed ? "pass" : "warn") : isCurrent ? "running" : "queued";
+                              const statusLabel = isDone ? (result?.passed ? "Passed" : "Needs setup") : isCurrent ? "Running" : "Queued";
+
+                              return (
+                                <li key={scenario.title}>
+                                  <button
+                                    className={scenarioIndex === index ? "is-active" : ""}
+                                    data-status={status}
+                                    type="button"
+                                    aria-pressed={scenarioIndex === index}
+                                    onClick={() => {
+                                      setScenarioIndex(index);
+                                      if (testRunState !== "running") {
+                                        setActiveRunIndex(index);
+                                      }
+                                    }}
+                                  >
+                                    <span className="launch-tests-index">{index + 1}</span>
+                                    <span className="launch-tests-meta">
+                                      <strong>{scenario.title}</strong>
+                                      <small>{scenario.label}</small>
+                                    </span>
+                                    <span className="launch-tests-status" data-status={status}>
+                                      {isCurrent ? <i className="launch-tests-spinner" aria-hidden="true" /> : null}
+                                      {statusLabel}
+                                    </span>
+                                    <b className="launch-tests-score">
+                                      {isDone || testRunState === "complete" ? `${result?.score ?? scenario.score}%` : "—"}
+                                    </b>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ol>
+
+                          <aside
+                            className="launch-tests-detail"
+                            data-status={completedRunCount > scenarioIndex ? (selectedScenarioResult.passed ? "pass" : "warn") : "idle"}
+                            aria-label="Scenario detail"
+                          >
+                            <header>
+                              <span>{selectedScenario.label}</span>
+                              <strong>{selectedScenario.title}</strong>
+                            </header>
+                            <div className="launch-tests-detail-score">
+                              <b>{detailScoreLabel}</b>
+                              <span>{detailStatusLabel}</span>
+                            </div>
+                            <p>{selectedScenarioResult.result}</p>
+                            <ul className="launch-tests-checks">
+                              {detailChecks.map((check, checkIndex) => {
+                                const isDoing = isActiveRunningScenario && checkIndex === detailChecks.length - 1;
+                                return (
+                                  <li
+                                    key={check.name}
+                                    data-pass={check.passed ? "true" : "false"}
+                                    data-state={isDoing ? "doing" : "done"}
+                                  >
+                                    {isDoing ? (
+                                      <i className="launch-tests-check-spinner" aria-hidden="true" />
+                                    ) : (
+                                      <i aria-hidden="true">{check.passed ? "✓" : "!"}</i>
+                                    )}
+                                    <span className="launch-tests-check-name">{check.name}</span>
+                                    {isDoing ? <b className="launch-tests-check-doing">Checking…</b> : null}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </aside>
+                        </div>
+                      </motion.section>
                     </div>
                   ) : null}
 
                   {step === 5 ? (
-                    <section className={`launch-request-panel ${launchRequestSubmitted ? "is-submitted" : ""}`}>
-                      <div className="launch-request-copy">
-                        <span>Engineer setup</span>
-                        <strong>{launchRequestSubmitted ? "Your setup request is in." : "Send this to an engineer."}</strong>
+                    <section className={`launch-final ${launchRequestSubmitted ? "is-submitted" : ""}`}>
+                      <header className="launch-final-head">
+                        <span>Confirm</span>
+                        <strong>{launchRequestSubmitted ? "Request sent" : "Confirm your details"}</strong>
                         <p>
                           {launchRequestSubmitted
-                            ? "An engineer will be in touch within 48 hours to help connect the agent to your website, phone line, and launch workflow."
-                            : "Share the live website and best phone contact so an engineer can help finish the production setup."}
+                            ? "An engineer will be in touch within 48 hours to take this live."
+                            : "Review your setup, add your live details, then send it over."}
                         </p>
+                      </header>
+
+                      <div className="launch-final-block-head">
+                        <span>Setup</span>
+                        <button type="button" className="launch-final-edit" onClick={() => setStep(0)}>Edit</button>
+                      </div>
+                      <dl className="launch-final-summary">
+                        {launchSummaryRows.map((row) => (
+                          <div key={row.label}>
+                            <dt>{row.label}</dt>
+                            <dd>
+                              <strong>{row.value}</strong>
+                              {row.hint ? <span>{row.hint}</span> : null}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+
+                      <div className="launch-final-agents">
+                        <header>
+                          <span>Agents</span>
+                          <strong>{workspaceAgents.length}</strong>
+                          <button type="button" className="launch-final-edit" onClick={() => setStep(3)}>Edit</button>
+                        </header>
+                        <ul>
+                          {workspaceAgents.map((agent) => (
+                            <li key={agent.id}>
+                              <div>
+                                <strong>{agent.name}</strong>
+                                <span>{agent.label}</span>
+                              </div>
+                              <small>{agent.trigger}</small>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
 
-                      <div className="launch-request-fields">
-                        <label>
-                          Website URL
+                      <div className="launch-final-block-head">
+                        <span>Live details</span>
+                      </div>
+                      <div className="launch-final-details">
+                        <label data-state={websiteError ? "invalid" : isValidWebsite ? "valid" : "idle"}>
+                          <span>Website</span>
                           <input
                             type="url"
+                            inputMode="url"
+                            autoComplete="url"
                             value={websiteUrl}
                             onChange={(event) => {
                               setWebsiteUrl(event.target.value);
                               setLaunchRequestSubmitted(false);
                             }}
                             placeholder="https://yourcompany.com"
+                            aria-invalid={websiteError}
                           />
+                          {websiteError ? (
+                            <small className="launch-final-error">Enter a full website, e.g. https://yourcompany.com</small>
+                          ) : null}
                         </label>
-                        <label>
-                          Phone contact number
+                        <label data-state={phoneError ? "invalid" : isValidPhone ? "valid" : "idle"}>
+                          <span>Phone contact</span>
                           <input
                             type="tel"
+                            inputMode="tel"
+                            autoComplete="tel"
                             value={phoneContactNumber}
                             onChange={(event) => {
                               setPhoneContactNumber(event.target.value);
                               setLaunchRequestSubmitted(false);
                             }}
                             placeholder="+1 555 010 1234"
+                            aria-invalid={phoneError}
+                          />
+                          {phoneError ? (
+                            <small className="launch-final-error">Enter a valid phone number (7\u201315 digits, with country code)</small>
+                          ) : null}
+                        </label>
+                        <label className="launch-final-notes">
+                          <span>Notes <i>Optional</i></span>
+                          <textarea
+                            value={otherPlatformNote}
+                            onChange={(event) => {
+                              setOtherPlatformNote(event.target.value);
+                              setLaunchRequestSubmitted(false);
+                            }}
+                            placeholder="Anything else an engineer should know."
+                            rows={2}
                           />
                         </label>
                       </div>
 
                       {launchRequestSubmitted ? (
-                        <div className="launch-request-confirmation">
+                        <div className="launch-final-confirmation">
                           <span>Next step</span>
                           <strong>Engineer follow-up within 48 hours</strong>
                         </div>
@@ -4599,10 +7682,12 @@ function Dashboard({
                   <h2 id="setup-integration-modal-title">
                     {setupLoginIntegration
                       ? setupLoginIntegrationStage === "credentials"
-                        ? "Log in to " + setupLoginIntegration.company
+                        ? "Connect " + setupLoginIntegration.company
                         : setupLoginIntegrationStage === "success"
                           ? setupLoginIntegration.company + " connected"
-                          : "Logging in to " + setupLoginIntegration.company
+                        : setupLoginIntegrationStage === "blocked"
+                          ? setupLoginIntegration.company + " needs setup"
+                          : "Checking " + setupLoginIntegration.company
                       : "Add integration"}
                   </h2>
                 </div>
@@ -4630,7 +7715,7 @@ function Dashboard({
                     {setupLoginIntegrationStage === "credentials" ? (
                       <form className="completed-integration-login-form" onSubmit={submitSetupIntegrationLogin}>
                         <label>
-                          Email
+                          Work email
                           <input
                             type="email"
                             value={setupLoginIntegrationEmail}
@@ -4640,16 +7725,16 @@ function Dashboard({
                           />
                         </label>
                         <label>
-                          Password
+                          Required access notes
                           <input
-                            type="password"
+                            type="text"
                             value={setupLoginIntegrationPassword}
                             onChange={(event) => setSetupLoginIntegrationPassword(event.target.value)}
-                            placeholder="Enter password"
+                            placeholder="OAuth app, API key owner, webhook owner"
                           />
                         </label>
-                        <button type="submit" disabled={!setupLoginIntegrationEmail.trim() || !setupLoginIntegrationPassword.trim()}>
-                          Continue
+                        <button type="submit" disabled={!setupLoginIntegrationEmail.trim()}>
+                          Connect integration
                         </button>
                         <button type="button" onClick={() => setSetupLoginIntegration(null)}>
                           Choose another integration
@@ -4662,12 +7747,16 @@ function Dashboard({
                           <strong>
                             {setupLoginIntegrationStage === "success"
                               ? setupLoginIntegration.company + " is connected"
-                              : "Logging in to " + setupLoginIntegration.company}
+                              : setupLoginIntegrationStage === "blocked"
+                              ? setupLoginIntegration.company + " is not connected yet"
+                              : "Checking " + setupLoginIntegration.company}
                           </strong>
                           <small>
                             {setupLoginIntegrationStage === "success"
                               ? "Connection complete. Updating your setup."
-                              : "Opening secure authorization for this workspace."}
+                              : setupLoginIntegrationStage === "blocked"
+                              ? "A real OAuth, API key, or webhook connector is required before the agent can use this system."
+                              : "Checking whether a real provider connector is available."}
                           </small>
                         </div>
                         <div className={"completed-integration-login-progress " + (setupLoginIntegrationStage === "success" ? "is-complete" : "")} aria-hidden="true">
@@ -4715,6 +7804,175 @@ function Dashboard({
             </motion.section>
           </motion.div>
         ) : null}
+        {workflowAddPicker ? (
+          <motion.div
+            className="completed-integration-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workflow-add-modal-title"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setWorkflowAddPicker(null);
+              }
+            }}
+          >
+            <motion.section
+              className="completed-integration-modal workflow-add-modal"
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <header>
+                <div>
+                  <span>{activeWorkspaceAgent.name}</span>
+                  <h2 id="workflow-add-modal-title">{workflowAddPicker === "app" ? "Add an app" : "Add an action"}</h2>
+                  <p className="workflow-add-modal-subtitle">
+                    {workflowAddPicker === "app"
+                      ? "Drop a connected system into this agent's workflow."
+                      : "Add a step you want this agent to carry out."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setWorkflowAddPicker(null)} aria-label="Close add modal">
+                  ×
+                </button>
+              </header>
+              <div className="workflow-add-tabs" role="tablist" aria-label={workflowAddPicker === "app" ? "App categories" : "Action categories"}>
+                {(workflowAddPicker === "app" ? workflowAppPanels : workflowActionPanels).map((panel, index) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={safeWorkflowAddTab === index}
+                    className={`workflow-add-tab ${safeWorkflowAddTab === index ? "is-active" : ""}`}
+                    key={panel.tab}
+                    onClick={() => setWorkflowAddTab(index)}
+                  >
+                    {panel.tab}
+                  </button>
+                ))}
+              </div>
+              {workflowAddPicker === "app" ? (
+                <div className="workflow-add-panel">
+                  {workflowAppPanels[safeWorkflowAddTab] ? (
+                    <div className="completed-integration-picker workflow-add-picker is-apps">
+                      {workflowAppPanels[safeWorkflowAddTab].connected
+                        ? (workflowAppPanels[safeWorkflowAddTab].apps as Connector[]).map((connector, index) => (
+                            <motion.button
+                              type="button"
+                              key={connector.key}
+                              aria-label={`Add ${connector.provider}`}
+                              title={`${connector.provider} · ${connector.name}`}
+                              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              transition={{ delay: index * 0.025, duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                              whileHover={{ y: -3, scale: 1.025 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => {
+                                addWorkflowConnector(connector.key);
+                                addWorkflowApp(connector.key);
+                                setWorkflowAddPicker(null);
+                              }}
+                            >
+                              <ProviderLogo connector={connector} large />
+                              <strong>{connector.provider}</strong>
+                              <small>{connector.name}</small>
+                            </motion.button>
+                          ))
+                        : (workflowAppPanels[safeWorkflowAddTab].apps as Array<{ company: string; type: string; logoUrl: string }>).map((app, index) => (
+                            <motion.button
+                              type="button"
+                              key={`${app.company}-${app.type}`}
+                              aria-label={`Add ${app.company}`}
+                              title={`${app.company} · ${app.type}`}
+                              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              transition={{ delay: index * 0.025, duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                              whileHover={{ y: -3, scale: 1.025 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => {
+                                addCustomWorkflowApp(app.company, app.type);
+                                setWorkflowAddPicker(null);
+                              }}
+                            >
+                              <img
+                                src={app.logoUrl}
+                                alt=""
+                                loading="lazy"
+                                onError={(event) => {
+                                  event.currentTarget.style.display = "none";
+                                }}
+                              />
+                              <strong>{app.company}</strong>
+                              <small>{app.type}</small>
+                            </motion.button>
+                          ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="workflow-add-panel">
+                  {workflowActionPanels[safeWorkflowAddTab] && workflowActionPanels[safeWorkflowAddTab].actions ? (
+                    <div className="completed-integration-picker workflow-add-picker is-actions">
+                      {workflowActionPanels[safeWorkflowAddTab].actions!.map((action, index) => (
+                        <motion.button
+                          type="button"
+                          key={`${action.name}-${index}`}
+                          aria-label={`Add ${action.name}`}
+                          title={action.detail || action.name}
+                          initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ delay: index * 0.025, duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                          whileHover={{ y: -3, scale: 1.025 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            addWorkflowAction(undefined, action.name, action.detail);
+                            setWorkflowAddPicker(null);
+                          }}
+                        >
+                          <span className="workflow-action-picker-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                              <path d="M13 2 4.5 13.2c-.4.5 0 1.3.7 1.3H11l-1 7.5 8.5-11.2c.4-.5 0-1.3-.7-1.3H12l1-7.5Z" />
+                            </svg>
+                          </span>
+                          <span className="workflow-action-picker-copy">
+                            <strong>{action.name}</strong>
+                            {action.detail ? <small>{action.detail}</small> : null}
+                          </span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="completed-integration-picker workflow-add-picker is-actions">
+                      <motion.button
+                        type="button"
+                        className="workflow-add-picker-custom"
+                        aria-label="Add a custom action"
+                        initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        whileHover={{ y: -3, scale: 1.025 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          const name = window.prompt("Name this action");
+                          if (name && name.trim()) {
+                            addWorkflowAction(undefined, name.trim());
+                          }
+                          setWorkflowAddPicker(null);
+                        }}
+                      >
+                        <span className="workflow-add-picker-plus" aria-hidden="true">+</span>
+                        <strong>Custom action</strong>
+                      </motion.button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.section>
+          </motion.div>
+        ) : null}
       </AnimatePresence>
     </main>
   );
@@ -4736,6 +7994,8 @@ function CompletedOnboardingDashboard({
   onSignOut: () => void;
 }) {
   const [activeRoute, setActiveRoute] = useState("ai");
+  const [settingsTab, setSettingsTab] = useState("workspace");
+  const [helpTab, setHelpTab] = useState("start");
   const [assistantInput, setAssistantInput] = useState("");
   const [introStage, setIntroStage] = useState<"title" | "chat">("title");
   const [isAssistantTyping, setIsAssistantTyping] = useState(false);
@@ -4746,16 +8006,33 @@ function CompletedOnboardingDashboard({
   const [workspaceAssistantCharts, setWorkspaceAssistantCharts] = useState<WorkspaceAssistantChart[]>([]);
   const [isRouteMenuOpen, setIsRouteMenuOpen] = useState(false);
   const [activeMetricsTab, setActiveMetricsTab] = useState("overview");
+  const [activeMetricFocus, setActiveMetricFocus] = useState<ActiveMetricFocus | null>(null);
+  const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null);
+  const [openedLiveQueueId, setOpenedLiveQueueId] = useState<string | null>(null);
+  const [joinedLiveChatIds, setJoinedLiveChatIds] = useState<string[]>([]);
+  const [liveChatComposerText, setLiveChatComposerText] = useState("");
+  const [adminLiveChatMessages, setAdminLiveChatMessages] = useState<Record<string, { id: string; text: string }[]>>({});
+  const [showAllConversations, setShowAllConversations] = useState(false);
+  const [showAllHandoffs, setShowAllHandoffs] = useState(false);
+  const [showAllCalls, setShowAllCalls] = useState(false);
   const [launchGateRunState, setLaunchGateRunState] = useState<"idle" | "running" | "complete">("idle");
+  const [launchTestActiveIndex, setLaunchTestActiveIndex] = useState(0);
+  const [launchTestCompletedCount, setLaunchTestCompletedCount] = useState(0);
+  const [launchTestSelectedIndex, setLaunchTestSelectedIndex] = useState(0);
+  const [launchFixState, setLaunchFixState] = useState<"idle" | "fixing" | "fixed">("idle");
+  const [launchFixSteps, setLaunchFixSteps] = useState<{ label: string; status: "queued" | "fixing" | "done" }[]>([]);
+  const launchGateTestTimers = useRef<number[]>([]);
+  const launchFixTimers = useRef<number[]>([]);
+  const assistantScrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  const assistantReplyTimers = useRef<number[]>([]);
+  const [isLaunchDeployed, setIsLaunchDeployed] = useState(false);
+  const isOperationalDashboardLive = isLaunchDeployed;
+  const isOperationalRoute = (routeId: string) => routeId === "metrics" || routeId === "risk";
   const workspaceInitial = user.name?.slice(0, 1).toUpperCase() || user.email.slice(0, 1).toUpperCase();
   const routes = [
-    { id: "ai", title: "AI workspace", meta: "Ask anything" },
-    { id: "launch", title: "Launch Gate", meta: "Required tests" },
-    { id: "metrics", title: "Metrics", meta: "Today and trends" },
-    { id: "calls", title: "Customer calls", meta: "Live conversations" },
-    { id: "handoffs", title: "Handoffs", meta: "Owner review" },
-    { id: "knowledge", title: "Knowledge", meta: "Answers and gaps" },
-    { id: "workflows", title: "Workflows", meta: "Agent routing" },
+    { id: "ai", title: "AI workspace", meta: isOperationalDashboardLive ? "Ask anything" : "Launch prep" },
+    { id: "metrics", title: "Metrics", meta: isOperationalDashboardLive ? "Today and trends" : "Locked until live" },
+    { id: "risk", title: "Live Queue", meta: isOperationalDashboardLive ? "Active operations" : "Locked until live" },
     { id: "integrations", title: "Integrations", meta: "Connected stack" }
   ];
   const activeRouteData = routes.find((route) => route.id === activeRoute) || routes[0];
@@ -4765,6 +8042,8 @@ function CompletedOnboardingDashboard({
     meta: "Workspace"
   };
   const [liveMetrics, setLiveMetrics] = useState<LiveWorkspaceMetrics>(() => createInitialLiveMetrics(activeProject));
+  const [riskApiState, setRiskApiState] = useState<RiskQueueApiState>({ status: "idle", items: [], calls: [] });
+  const [modelHealth, setModelHealth] = useState<{ model: any; evaluation: any; drift: any; feedback: any }>({ model: null, evaluation: null, drift: null, feedback: null });
   const openingMetrics = useMemo(() => createInitialLiveMetrics(activeProject), [activeProject.id, activeProject.name]);
   const containmentRate = Math.round((liveMetrics.containedCalls / Math.max(1, liveMetrics.callsHandled)) * 100);
   const handoffRate = Math.round((liveMetrics.handoffs / Math.max(1, liveMetrics.callsHandled)) * 100);
@@ -4784,14 +8063,22 @@ function CompletedOnboardingDashboard({
   );
   const latencySeconds = (liveMetrics.p95LatencyMs / 1000).toFixed(1);
   const liveStatus = readinessScore >= 90 ? "Ready" : readinessScore >= 78 ? "Watching" : "Needs review";
-  const openingAssistantMessage =
-    `I loaded the ${activeProject.name} workspace snapshot. The preview currently shows ${openingMetrics.callsHandled} calls, ${openingContainmentRate}% solved without a human handoff, and ${openingLatencySeconds}s typical voice response time. There are ${openingMetrics.openRisks} item${openingMetrics.openRisks === 1 ? "" : "s"} needing attention across handoffs, knowledge, and safety checks. I can walk you through the numbers, show the calls behind them, or draft the next action plan.`;
-  const agentInsightMetrics = [
-    { label: "Calls handled", value: String(liveMetrics.callsHandled), detail: `${liveMetrics.activeCalls} active now` },
-    { label: "Resolved by AI", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls contained` },
-    { label: "Reply time", value: `${latencySeconds}s`, detail: "Live voice turn" },
-    { label: "Review needed", value: String(liveMetrics.openRisks), detail: `${liveMetrics.handoffs} handoffs today` }
-  ];
+  const openingAssistantMessage = isOperationalDashboardLive
+    ? `I loaded the ${activeProject.name} workspace snapshot. The preview currently shows ${openingMetrics.callsHandled} calls, ${openingContainmentRate}% solved without a human handoff, and ${openingLatencySeconds}s typical voice response time. There are ${openingMetrics.openRisks} item${openingMetrics.openRisks === 1 ? "" : "s"} needing attention across handoffs, knowledge, and safety checks. I can walk you through the numbers, show the calls behind them, or draft the next action plan.`
+    : `I loaded the ${activeProject.name} launch workspace. Live metrics, calls, and chats stay locked until the Launch Gate is passed and the agent is launched. I can help you run the gate, review blockers, connect systems, or prepare the launch plan.`;
+  const agentInsightMetrics = isOperationalDashboardLive
+    ? [
+      { label: "Calls handled", value: String(liveMetrics.callsHandled), detail: `${liveMetrics.activeCalls} active now` },
+      { label: "Resolved by AI", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls contained` },
+      { label: "Reply time", value: `${latencySeconds}s`, detail: "Live voice turn" },
+      { label: "Review needed", value: String(liveMetrics.openRisks), detail: `${liveMetrics.handoffs} handoffs today` }
+    ]
+    : [
+      { label: "Launch state", value: "Not live", detail: "Operational data locked" },
+      { label: "Gate score", value: "Pending", detail: "Run launch checks" },
+      { label: "Access", value: "Locked", detail: "Metrics, calls, chats" },
+      { label: "Next", value: "Gate", detail: "Pass and launch" }
+    ];
   const liveHourLabels = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "Now"];
   const workspaceHourlyChart = workspaceAssistantCharts.find((chart) => chart.id === "hourly-volume");
   const workspaceHandoffChart = workspaceAssistantCharts.find((chart) => chart.id === "handoff-reasons");
@@ -4805,6 +8092,157 @@ function CompletedOnboardingDashboard({
     label,
     value: liveMetrics.hourlyVolume[index] || 0
   }));
+  const demoMetricCallRecords = useMemo(
+    () => createMetricCallRecords(activeProject, liveMetrics, liveHourLabels),
+    [activeProject.id, liveMetrics.hourlyVolume, liveMetrics.callsHandled]
+  );
+  const metricCallRecords = riskApiState.calls.length ? riskApiState.calls : demoMetricCallRecords;
+  const demoRiskQueueItems = useMemo(
+    () => createRiskQueueItems(activeProject, liveMetrics, demoMetricCallRecords),
+    [activeProject.id, liveMetrics.sensitiveEscalations, demoMetricCallRecords]
+  );
+  const riskQueueItems = riskApiState.items.length ? riskApiState.items : demoRiskQueueItems;
+  const resolvedCallCount = metricCallRecords.filter((call) => call.outcome === "Resolved").length;
+  const followUpCallCount = metricCallRecords.filter((call) => call.outcome === "Handoff" || call.outcome === "Review").length;
+  const averageCallDurationSeconds = Math.round(
+    metricCallRecords.reduce((total, call) => total + parseMetricDurationSeconds(call.duration), 0) / Math.max(1, metricCallRecords.length)
+  );
+  const recentCallTimeline = metricCallRecords.slice(-4).reverse().map((call) => ({
+    time: formatMetricCallTime(call.time),
+    title: call.intent,
+    detail: call.summary,
+    tag: call.outcome
+  }));
+  const livePhoneConversations = metricCallRecords
+    .filter((call) => call.hourLabel === "Now" || call.outcome === "Handoff" || call.outcome === "Review")
+    .slice(-Math.max(4, Math.min(8, liveMetrics.activeCalls || 4)))
+    .reverse()
+    .map((call, index) => conversationFromCall(call, index, "phone"));
+  const liveChatConversations = [
+    ...riskQueueItems
+      .filter((item) => item.sourceType === "ticket")
+      .slice(0, 4)
+      .map((item) => conversationFromRiskItem(item, "chat")),
+    ...metricCallRecords
+      .filter((call, index) => index % 5 === 0 && call.outcome !== "Abandoned")
+      .slice(-4)
+      .reverse()
+      .map((call, index) => conversationFromCall(call, index, "chat"))
+  ].slice(0, 6);
+  const humanHandoffConversations = [
+    ...riskQueueItems
+      .filter((item) => item.riskLevel === "high")
+      .map((item) => conversationFromRiskItem(item, item.sourceType === "call" ? "phone" : "chat")),
+    ...metricCallRecords
+      .filter((call) => call.outcome === "Handoff")
+      .slice(-4)
+      .map((call, index) => conversationFromCall(call, index, "phone"))
+  ]
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, 7);
+  const highPriorityConversations = Array.from(
+    new Map(
+      [...humanHandoffConversations, ...livePhoneConversations, ...liveChatConversations]
+        .filter((item) => item.riskLevel === "high" || item.riskScore >= 76)
+        .sort((a, b) => b.riskScore - a.riskScore)
+        .map((item) => [item.id, item])
+    ).values()
+  ).slice(0, 7);
+  const liveRiskSections = [
+    { id: "active-chats", label: "Active chats", count: liveChatConversations.length, items: liveChatConversations },
+    { id: "active-phone", label: "Active phone calls", count: livePhoneConversations.length, items: livePhoneConversations },
+    { id: "human-handoff", label: "Agent needed", count: humanHandoffConversations.length, items: humanHandoffConversations },
+    { id: "high-priority", label: "Urgent queue", count: highPriorityConversations.length, items: highPriorityConversations }
+  ];
+  const liveQueueItems = liveRiskSections.flatMap((section) =>
+    section.items.map((item) => ({
+      ...item,
+      lane: section.label
+    }))
+  );
+  const allActiveConversationRows = Array.from(new Map(liveQueueItems.map((item) => [item.id, item])).values());
+  const activeConversationRows = showAllConversations ? allActiveConversationRows : allActiveConversationRows.slice(0, 6);
+  const allLiveCallRows = metricCallRecords
+    .filter((call) => call.hourLabel === "Now" || call.outcome === "Handoff" || call.outcome === "Review" || call.outcome === "Resolved")
+    .reverse();
+  // Build conversation rows once over the full list so each row's id (which embeds
+  // its index) stays stable whether or not the list is expanded.
+  const allLiveCallConversationRows = allLiveCallRows.map((call, index) => conversationFromCall(call, index, "phone"));
+  const liveCallRows = showAllCalls ? allLiveCallRows : allLiveCallRows.slice(0, 4);
+  const liveCallConversationRows = showAllCalls ? allLiveCallConversationRows : allLiveCallConversationRows.slice(0, 4);
+  const openedLiveQueueItem = liveQueueItems.find((item) => item.id === openedLiveQueueId)
+    || allLiveCallConversationRows.find((item) => item.id === openedLiveQueueId)
+    || null;
+  const allHandoffQueueRows = humanHandoffConversations;
+  const handoffQueueRows = showAllHandoffs ? allHandoffQueueRows : allHandoffQueueRows.slice(0, 5);
+  const durationForConversation = (item: LiveRiskConversation, index: number) => {
+    const baseSeconds = Math.max(70, Math.round(75 + item.riskScore * 1.6 + index * 37 + (item.channel === "phone" ? 58 : 0)));
+    const minutes = Math.floor(baseSeconds / 60);
+    const seconds = baseSeconds % 60;
+
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
+  const openedLiveQueueIndex = Math.max(0, activeConversationRows.findIndex((item) => item.id === openedLiveQueueId));
+  const openedLiveQueueDuration = openedLiveQueueItem ? durationForConversation(openedLiveQueueItem, openedLiveQueueIndex) : "00:00";
+  const openedLiveQueueTranscript: MetricCallRecord["transcript"] = openedLiveQueueItem
+    ? (openedLiveQueueItem.transcript && openedLiveQueueItem.transcript.length
+      ? openedLiveQueueItem.transcript
+      : [
+        { speaker: "Customer", text: openedLiveQueueItem.detail },
+        { speaker: "AI", text: openedLiveQueueItem.channel === "phone" ? "I have your account context open. I am checking the approved policy before I answer." : "I can help with that. I am checking your account and the approved answer path now." },
+        { speaker: "System", text: `${operationStatusLabel(openedLiveQueueItem.status)}. ${openedLiveQueueItem.action}` }
+      ])
+    : [];
+  const openedLiveQueueIsJoined = openedLiveQueueItem ? joinedLiveChatIds.includes(openedLiveQueueItem.id) : false;
+  const openedLiveQueueAdminMessages = openedLiveQueueItem ? (adminLiveChatMessages[openedLiveQueueItem.id] || []) : [];
+  const agentDisplayName = user.name?.trim() || user.email.split("@")[0] || "Agent";
+  const openedLiveQueueThread = openedLiveQueueItem
+    ? [
+      ...openedLiveQueueTranscript.map((turn, index) => ({
+        key: `turn-${index}`,
+        role: turn.speaker as "Customer" | "AI" | "System" | "Admin",
+        name: turn.speaker === "Customer" ? openedLiveQueueItem.customer : turn.speaker === "System" ? "System" : "RelayClarity AI",
+        text: turn.text
+      })),
+      ...(openedLiveQueueIsJoined
+        ? [{
+          key: "join-event",
+          role: "System" as const,
+          name: "System",
+          text: `${agentDisplayName} joined the conversation. The customer can see a human agent is now connected.`
+        }]
+        : []),
+      ...openedLiveQueueAdminMessages.map((message) => ({
+        key: message.id,
+        role: "Admin" as const,
+        name: `${agentDisplayName} (you)`,
+        text: message.text
+      }))
+    ]
+    : [];
+  const handleJoinLiveChat = (conversationId: string) => {
+    setJoinedLiveChatIds((previous) => (previous.includes(conversationId) ? previous : [...previous, conversationId]));
+  };
+  const handleLeaveLiveChat = (conversationId: string) => {
+    setJoinedLiveChatIds((previous) => previous.filter((value) => value !== conversationId));
+  };
+  const handleSendLiveChatReply = (conversationId: string) => {
+    const text = liveChatComposerText.trim();
+    if (!text) {
+      return;
+    }
+
+    setJoinedLiveChatIds((previous) => (previous.includes(conversationId) ? previous : [...previous, conversationId]));
+    setAdminLiveChatMessages((previous) => {
+      const existing = previous[conversationId] || [];
+
+      return {
+        ...previous,
+        [conversationId]: [...existing, { id: `admin-${conversationId}-${existing.length}`, text }]
+      };
+    });
+    setLiveChatComposerText("");
+  };
   const handoffReasons = workspaceHandoffChart
     ? workspaceHandoffChart.data.map((reason) => ({
       label: reason.label,
@@ -4820,10 +8258,11 @@ function CompletedOnboardingDashboard({
   const [selectedCompletedIntegrationCategory, setSelectedCompletedIntegrationCategory] = useState<"core" | "operations" | "growth">("core");
   const [isAddIntegrationModalOpen, setIsAddIntegrationModalOpen] = useState(false);
   const [loginIntegration, setLoginIntegration] = useState<{ company: string; type: string; logoUrl: string } | null>(null);
-  const [loginIntegrationStage, setLoginIntegrationStage] = useState<"credentials" | "connecting" | "success">("credentials");
+  const [loginIntegrationStage, setLoginIntegrationStage] = useState<"credentials" | "connecting" | "success" | "blocked">("credentials");
   const [loginIntegrationEmail, setLoginIntegrationEmail] = useState("");
   const [loginIntegrationPassword, setLoginIntegrationPassword] = useState("");
   const integrationLoginTimers = useRef<number[]>([]);
+  const [connectedCompletedIntegrationIds, setConnectedCompletedIntegrationIds] = useState<string[]>([]);
   const completedIntegrationCategories = [
     { id: "core", label: "Core" },
     { id: "operations", label: "Operations" },
@@ -4971,7 +8410,15 @@ function CompletedOnboardingDashboard({
     }
   ];
   const [addedCompletedIntegrations, setAddedCompletedIntegrations] = useState<Array<(typeof completedIntegrationSystems)[number]>>([]);
-  const allCompletedIntegrationSystems = [...completedIntegrationSystems, ...addedCompletedIntegrations];
+  const allCompletedIntegrationSystems = [...completedIntegrationSystems, ...addedCompletedIntegrations].map((system) =>
+    connectedCompletedIntegrationIds.includes(system.id) ? {
+      ...system,
+      status: "Connected",
+      health: "Passing",
+      lastSync: "Just now",
+      checks: system.checks.length ? system.checks : ["Sandbox authorization", "Scope check", "Dashboard handoff"]
+    } : system
+  );
   const selectedCompletedIntegration = allCompletedIntegrationSystems.find((system) => system.id === selectedCompletedIntegrationId) || allCompletedIntegrationSystems[0];
   const visibleCompletedIntegrationSystems = allCompletedIntegrationSystems.filter((system) => system.category === selectedCompletedIntegrationCategory);
   const visibleAddIntegrationCatalog = addIntegrationCatalog[selectedCompletedIntegrationCategory];
@@ -5007,32 +8454,281 @@ function CompletedOnboardingDashboard({
       launchGateRuntimeScore * 0.22 +
       launchGateSafetyScore * 0.16
   );
+  const launchGateThreshold = 90;
   const launchGateCriticalFailures = [
     liveMetrics.policyViolations > 0 ? "Critical safety rule break" : "",
     !launchGateRequiredConnectionsPassed ? "Required connection failed" : "",
-    launchGateRuntimeScore < 90 ? "Runtime health below launch threshold" : "",
-    launchGateScenarioPassRate < 90 ? "Scenario pass rate below 90%" : ""
+    launchGateRuntimeScore < launchGateThreshold ? "Runtime needs review" : "",
+    launchGateScenarioPassRate < launchGateThreshold ? "Scenarios need review" : "",
+    launchGateSafetyScore < launchGateThreshold ? "Safety needs review" : ""
   ].filter(Boolean);
-  const launchGateAllowed = launchGateScore >= 90 && launchGateCriticalFailures.length === 0;
-  const launchGateStatus = launchGateAllowed ? "Ready to launch" : "Launch locked";
-  const launchGateStatusDetail = launchGateAllowed
-    ? "All required checks are above the production threshold."
-    : `${launchGateCriticalFailures.length || 1} blocker${launchGateCriticalFailures.length === 1 ? "" : "s"} must be cleared before launch.`;
-  const launchGateFixItems = launchGateCriticalFailures.length
+	  const launchGateAllowed = launchGateScore >= launchGateThreshold && launchGateCriticalFailures.length === 0;
+	  const launchGateAttention = !launchGateAllowed;
+	  const launchGateCriticalAttention = liveMetrics.policyViolations > 0 || !launchGateRequiredConnectionsPassed || launchGateSafetyScore < launchGateThreshold;
+	  const launchGateToneColor = launchGateAllowed ? "#059669" : launchGateCriticalAttention ? "#dc2626" : "#f59e0b";
+	  const launchGateStatus = launchGateAllowed ? "Ready to launch" : "Needs review";
+	  const launchGateSignalLines = [
+	    {
+	      label: "Scenarios",
+	      value: `${launchGateScenarioPassRate}%`,
+	      status: launchGateScenarioPassRate >= launchGateThreshold ? "Passing" : "Needs work"
+	    },
+	    {
+	      label: "Runtime",
+	      value: `${launchGateRuntimeScore}%`,
+	      status: launchGateRuntimeScore >= launchGateThreshold ? "Stable" : "Attention"
+	    },
+	    {
+	      label: "Connections",
+	      value: `${launchGateConnectionScore}%`,
+	      status: launchGateRequiredConnectionsPassed ? "Connected" : "Missing"
+	    },
+	    {
+	      label: "Safety",
+	      value: `${launchGateSafetyScore}%`,
+	      status: launchGateSafetyScore >= launchGateThreshold && liveMetrics.policyViolations === 0 ? "Clear" : "Review"
+	    }
+  ];
+	  const launchGateActivity = [
+	    {
+	      label: "Container readiness",
+	      detail: launchGateRuntimeScore >= launchGateThreshold ? "Readiness, liveness, latency, and error signals are inside the launch band." : "Re-run runtime diagnostics before sending production traffic.",
+	      state: launchGateRuntimeScore >= launchGateThreshold ? "Pass" : "Attention"
+	    },
+	    {
+	      label: "Scenario tests",
+	      detail: launchGateScenarioPassRate >= launchGateThreshold ? "Customer scenarios meet the launch threshold." : "Retest failed scenarios and improve the weak paths.",
+	      state: launchGateScenarioPassRate >= launchGateThreshold ? "Pass" : "Review"
+	    },
+    {
+      label: "Connection safety",
+      detail: launchGateRequiredConnectionsPassed ? "CRM, telephony, knowledge, and helpdesk checks are passing." : "One required production dependency is not healthy.",
+      state: launchGateRequiredConnectionsPassed ? "Pass" : "Attention"
+    },
+    {
+      label: "AI safety",
+      detail: liveMetrics.policyViolations === 0 ? "No critical safety rule breaks are currently present." : "Critical safety failures block launch.",
+      state: liveMetrics.policyViolations === 0 ? "Pass" : "Attention"
+    }
+  ];
+  const launchGateTestsComplete = launchGateRunState === "complete";
+  const launchGateAccuracyBlocked = launchGateScenarioPassRate < launchGateThreshold;
+  const launchGateCanLaunch = launchGateAllowed && launchGateTestsComplete;
+  const launchGateOperationalState = isLaunchDeployed
+    ? "live"
+    : launchGateAccuracyBlocked
+      ? "blocked"
+      : "not-live";
+  const launchGateOperationalCopy = {
+    live: {
+      eyebrow: "Live",
+      title: "Agent is live in production.",
+      summary: "Production traffic is enabled. Monitor uptime, response speed, active volume, and handoffs."
+    },
+    blocked: {
+      eyebrow: "Cannot launch",
+      title: "Accuracy is below the launch threshold.",
+      summary: "Run tests to pinpoint the weak customer paths before production traffic is enabled."
+    },
+    "not-live": {
+      eyebrow: "Not live",
+      title: "Agent is ready for launch.",
+      summary: "This agent is not in production yet. Launch when you are ready to enable traffic."
+    }
+  }[launchGateOperationalState];
+  const launchGateBlockedReasons = launchGateCriticalFailures.length > 0
     ? launchGateCriticalFailures
-    : launchGateScore < 90
-      ? ["Raise launch score to 90%"]
-      : ["No fixes needed"];
-  const launchGateFixSummary = launchGateAllowed
-    ? "No blockers remain. You can launch this agent now."
-    : `${launchGateFixItems.length} ${launchGateFixItems.length === 1 ? "item needs" : "items need"} attention before launch.`;
+    : launchGateAllowed
+      ? ["Final gate check has not run"]
+      : ["Launch score is below 90%"];
+  const launchGateTestResults = [
+    {
+      label: "Customer accuracy",
+      detail: "Runs the current scenario pack against approved answers and handoff rules.",
+      value: `${launchGateScenarioPassRate}%`,
+      required: `${launchGateThreshold}% required`,
+      action: launchGateScenarioPassRate >= launchGateThreshold ? "No action needed" : "Retest scenarios",
+      state: launchGateScenarioPassRate >= launchGateThreshold ? "Pass" : "Retest"
+    },
+    {
+      label: "Production systems",
+      detail: "Checks telephony events, CRM lookup, ticket creation, and knowledge sync.",
+      value: `${launchGateConnectionScore}%`,
+      required: "All required",
+      action: launchGateRequiredConnectionsPassed ? "No action needed" : "Fix connection",
+      state: launchGateRequiredConnectionsPassed ? "Pass" : "Blocked"
+    },
+    {
+      label: "Runtime health",
+      detail: "Confirms latency, worker health, webhook errors, and failed turn rate.",
+      value: `${launchGateRuntimeScore}%`,
+      required: `${launchGateThreshold}% required`,
+      action: launchGateRuntimeScore >= launchGateThreshold ? "No action needed" : "Review runtime",
+      state: launchGateRuntimeScore >= launchGateThreshold ? "Pass" : "Review"
+    },
+    {
+      label: "Safety guardrails",
+      detail: "Verifies critical policy breaks are zero before production traffic is allowed.",
+      value: `${launchGateSafetyScore}%`,
+      required: "0 critical breaks",
+      action: launchGateSafetyScore >= launchGateThreshold && liveMetrics.policyViolations === 0 ? "No action needed" : "Review safety",
+      state: launchGateSafetyScore >= launchGateThreshold && liveMetrics.policyViolations === 0 ? "Pass" : "Blocked"
+    }
+  ];
+  const launchGateFailedTest = launchGateTestResults.find((test) => test.state !== "Pass") || launchGateTestResults[0];
+  const launchGateDecisionTitle = isLaunchDeployed
+    ? "Agent is live"
+    : launchGateRunState === "running"
+      ? "Checking launch readiness"
+      : launchGateCanLaunch
+        ? "Ready to launch"
+        : launchGateAllowed
+          ? "Gate check needed"
+          : "Launch blocked";
+  const launchGateDecisionSummary = isLaunchDeployed
+    ? "Production is enabled."
+    : launchGateRunState === "running"
+      ? "Checking requirements."
+      : launchGateCanLaunch
+        ? "All checks passed."
+        : launchGateAllowed
+          ? "Run the final check."
+          : `${launchGateFailedTest.label} needs review.`;
+  const launchGatePrimaryAction = isLaunchDeployed
+    ? "Live"
+    : launchGateRunState === "running"
+      ? "Checking"
+      : launchGateCanLaunch
+        ? "Launch agent"
+        : "Run gate check";
+  const launchGateLastChecked = launchGateTestsComplete ? "Just now" : "Not checked in this session";
+  const launchGateRunHistory = [
+    {
+      label: launchGateTestsComplete ? "Latest gate check" : "Next gate check",
+      result: launchGateTestsComplete ? (launchGateAllowed ? "Passed" : "Blocked") : "Ready to run",
+      detail: launchGateTestsComplete ? `${launchGateScore}% launch score` : "Run the gate before launching"
+    },
+    {
+      label: "Scenario pack",
+      result: launchGateScenarioPassRate >= launchGateThreshold ? "Passing" : "Needs retest",
+      detail: `${launchGateScenarioPassRate}% customer accuracy`
+    }
+  ];
+  const launchDiagnosticSteps = [
+    {
+      label: "Replay scenarios",
+      detail: `${liveMetrics.lowConfidenceAnswers} low-confidence answer${liveMetrics.lowConfidenceAnswers === 1 ? "" : "s"}`,
+      state: launchGateRunState === "idle" ? "queued" : "complete"
+    },
+    {
+      label: "Check handoffs",
+      detail: `${liveMetrics.sensitiveEscalations} sensitive escalation${liveMetrics.sensitiveEscalations === 1 ? "" : "s"}`,
+      state: launchGateRunState === "idle" ? "queued" : launchGateRunState === "running" ? "running" : "complete"
+    },
+    {
+      label: "Score accuracy",
+      detail: `${launchGateScenarioPassRate}% / ${launchGateThreshold}% required`,
+      state: launchGateRunState === "idle" ? "queued" : launchGateRunState === "running" ? "running" : launchGateAccuracyBlocked ? "failed" : "complete"
+    }
+  ];
+  const launchDiagnosticFinding = launchGateTestsComplete
+    ? launchGateAccuracyBlocked
+      ? `Accuracy is ${launchGateScenarioPassRate}%. Improve low-confidence answers and retest the customer scenario pack.`
+      : "Synthetic launch tests passed. No accuracy blocker found."
+    : launchGateAccuracyBlocked
+      ? "Accuracy is below threshold. Run tests to isolate the failing paths."
+      : "No launch blocker is currently detected.";
+  const launchUptimeDetails = [
+    { label: "Uptime", value: "99.98%", detail: "Last 30 days" },
+    { label: "Voice response", value: `${latencySeconds}s`, detail: "P95 turn latency" },
+    { label: "Active calls", value: String(liveMetrics.activeCalls), detail: "Right now" },
+    { label: "Handoffs", value: String(liveMetrics.handoffs), detail: "Today" }
+  ];
+  const launchRuntimeDetails = [
+    { label: "Channel", value: "Zoom", detail: "Production queue" },
+    { label: "Monitoring", value: "On", detail: "Safety and latency" },
+    { label: "Last deploy", value: "Today", detail: "Gate passed" },
+    { label: "Review", value: "Weekly", detail: "Quality check" }
+  ];
+  const launchGateTestChecks: Record<string, { name: string; passed: boolean; value: string }[]> = {
+    "Customer accuracy": [
+      { name: "Answered from approved knowledge", passed: liveMetrics.citationCoverage >= 80, value: `${liveMetrics.citationCoverage}% cited` },
+      { name: "Resolved on first contact", passed: liveMetrics.firstContactResolution >= 75, value: `${liveMetrics.firstContactResolution}%` },
+      { name: "Low-confidence answers contained", passed: liveMetrics.lowConfidenceAnswers <= 3, value: `${liveMetrics.lowConfidenceAnswers} flagged` },
+      { name: "Sensitive cases escalated", passed: liveMetrics.sensitiveEscalations <= 4, value: `${liveMetrics.sensitiveEscalations} handed off` }
+    ],
+    "Production systems": [
+      { name: "CRM lookup", passed: liveMetrics.crmLookupSuccess >= 95, value: `${liveMetrics.crmLookupSuccess}%` },
+      { name: "Ticket creation", passed: liveMetrics.ticketWriteSuccess >= 95, value: `${liveMetrics.ticketWriteSuccess}%` },
+      { name: "Required connections live", passed: launchGateRequiredConnectionsPassed, value: launchGateRequiredConnectionsPassed ? "All passing" : "Action needed" },
+      { name: "Knowledge sync", passed: liveMetrics.knowledgeSyncMinutes <= 15, value: `${liveMetrics.knowledgeSyncMinutes}m ago` }
+    ],
+    "Runtime health": [
+      { name: "P95 turn latency", passed: liveMetrics.p95LatencyMs <= 2500, value: `${latencySeconds}s` },
+      { name: "Webhook delivery", passed: liveMetrics.webhookErrors === 0, value: liveMetrics.webhookErrors === 0 ? "No errors" : `${liveMetrics.webhookErrors} errors` },
+      { name: "Failed turns", passed: liveMetrics.failedTurns <= 1, value: `${liveMetrics.failedTurns}` },
+      { name: "Worker health", passed: launchGateRuntimeScore >= launchGateThreshold, value: launchGateRuntimeScore >= launchGateThreshold ? "Healthy" : "Degraded" }
+    ],
+    "Safety guardrails": [
+      { name: "Critical policy breaks", passed: liveMetrics.policyViolations === 0, value: `${liveMetrics.policyViolations}` },
+      { name: "Unsupported attempts blocked", passed: liveMetrics.unsupportedAttempts <= 5, value: `${liveMetrics.unsupportedAttempts}` },
+      { name: "Draft answers reviewed", passed: liveMetrics.draftAnswers <= 5, value: `${liveMetrics.draftAnswers} pending` },
+      { name: "Sensitive escalations routed", passed: liveMetrics.sensitiveEscalations <= 4, value: `${liveMetrics.sensitiveEscalations}` }
+    ]
+  };
+  const launchGateTestSuite = launchGateTestResults.map((test) => ({
+    ...test,
+    checks: launchGateTestChecks[test.label] || []
+  }));
+  const launchGateTestSuitePassedCount = launchGateTestSuite.filter((test) => test.state === "Pass").length;
+  const launchGateFailingTests = launchGateTestSuite.filter((test) => test.state !== "Pass");
+  const firstFailingLaunchTest = launchGateFailingTests[0];
+  const launchTestRunPassedCount = launchGateRunState === "complete"
+    ? launchGateTestSuitePassedCount
+    : launchGateTestSuite.slice(0, launchTestCompletedCount).filter((test) => test.state === "Pass").length;
+  const launchTestProgress = launchGateRunState === "complete"
+    ? 100
+    : Math.round((launchTestCompletedCount / launchGateTestSuite.length) * 100);
+  const selectedLaunchTest = launchGateTestSuite[Math.min(launchTestSelectedIndex, launchGateTestSuite.length - 1)] || launchGateTestSuite[0];
+  const launchTestRunningLabel = launchGateTestSuite[Math.min(launchTestActiveIndex, launchGateTestSuite.length - 1)]?.label || "launch checks";
   const runLaunchGateTests = () => {
+    setActiveRoute("launch-tests");
+    setActiveMetricFocus(null);
+
     if (launchGateRunState === "running") {
       return;
     }
 
+    launchGateTestTimers.current.forEach((timer) => window.clearTimeout(timer));
+    launchGateTestTimers.current = [];
+    setLaunchTestCompletedCount(0);
+    setLaunchTestActiveIndex(0);
+    setLaunchTestSelectedIndex(0);
     setLaunchGateRunState("running");
-    window.setTimeout(() => setLaunchGateRunState("complete"), 1500);
+
+    const total = launchGateTestSuite.length;
+    for (let index = 0; index < total; index += 1) {
+      launchGateTestTimers.current.push(window.setTimeout(() => {
+        setLaunchTestActiveIndex(Math.min(index + 1, total - 1));
+        setLaunchTestCompletedCount(index + 1);
+        setLaunchTestSelectedIndex(index);
+      }, 650 * (index + 1)));
+    }
+    launchGateTestTimers.current.push(window.setTimeout(() => {
+      setLaunchGateRunState("complete");
+    }, 650 * total + 250));
+  };
+  const launchAgent = () => {
+    if (launchGateAccuracyBlocked) {
+      runLaunchGateTests();
+      return;
+    }
+
+    if (!launchGateCanLaunch) {
+      return;
+    }
+
+    setIsLaunchDeployed(true);
   };
   const selectedCompletedConnector: Connector = {
     key: selectedCompletedIntegration.key,
@@ -5096,8 +8792,34 @@ function CompletedOnboardingDashboard({
       { label: "Dashboards read", detail: "Confirm reporting destination" }
     ];
   };
-  const completeIntegrationLogin = (integration: { company: string; type: string; logoUrl: string }) => {
+  const connectCompletedIntegration = async (system = selectedCompletedIntegration) => {
+    const connection = await fetchJsonFromApi<IntegrationConnectResult>("/api/integrations/connect", {
+      method: "POST",
+      body: JSON.stringify({
+        providerId: system.providerId,
+        providerName: system.provider,
+        category: system.key,
+        workspaceName: activeProject.name,
+        mode: "sandbox"
+      })
+    });
+
+    setConnectedCompletedIntegrationIds((current) => current.includes(system.id) ? current : [...current, system.id]);
+    return connection;
+  };
+  const completeIntegrationLogin = async (integration: { company: string; type: string; logoUrl: string }) => {
     const id = `added-${integration.company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
+    const connectorKey = connectorKeyForIntegration(integration.type, selectedCompletedIntegrationCategory);
+    const connection = await fetchJsonFromApi<IntegrationConnectResult>("/api/integrations/connect", {
+      method: "POST",
+      body: JSON.stringify({
+        providerId: providerIdFromName(integration.company, connectorKey),
+        providerName: integration.company,
+        category: connectorKey,
+        workspaceName: activeProject.name,
+        mode: "sandbox"
+      })
+    });
 
     setAddedCompletedIntegrations((current) => {
       if (allCompletedIntegrationSystems.some((system) => system.id === id) || current.some((system) => system.id === id)) {
@@ -5111,42 +8833,43 @@ function CompletedOnboardingDashboard({
           category: selectedCompletedIntegrationCategory,
           key: id,
           name: integration.type,
-          providerId: id,
-          provider: integration.company,
-          logoUrl: integration.logoUrl,
+          providerId: connection.providerId,
+          provider: connection.name,
+          logoUrl: integration.logoUrl || connection.logoUrl,
           status: "Connected",
-          health: "Connected",
+          health: "Passing",
           lastSync: "Just now",
-          description: `${integration.company} is connected to this workspace.`,
-          scopes: [],
+          description: connection.message,
+          scopes: connection.scopes,
           access: connectedAccessForIntegration(integration.type),
-          checks: [],
+          checks: ["Sandbox authorization", "Scope check", "Dashboard handoff"],
           actions: [`Sync ${integration.type.toLowerCase()}`]
         }
       ];
     });
+    setConnectedCompletedIntegrationIds((current) => current.includes(id) ? current : [...current, id]);
     setSelectedCompletedIntegrationId(id);
   };
-  const submitIntegrationLogin = (event: React.FormEvent<HTMLFormElement>) => {
+  const submitIntegrationLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!loginIntegration || !loginIntegrationEmail.trim() || !loginIntegrationPassword.trim()) {
+    if (!loginIntegration || !loginIntegrationEmail.trim()) {
       return;
     }
 
     clearIntegrationLoginTimers();
     setLoginIntegrationStage("connecting");
 
-    const successTimer = window.setTimeout(() => {
+    try {
+      await completeIntegrationLogin(loginIntegration);
       setLoginIntegrationStage("success");
-    }, 1450);
 
-    const closeTimer = window.setTimeout(() => {
-      completeIntegrationLogin(loginIntegration);
-      closeAddIntegrationModal();
-    }, 2450);
-
-    integrationLoginTimers.current = [successTimer, closeTimer];
+      const closeTimer = window.setTimeout(closeAddIntegrationModal, 900);
+      integrationLoginTimers.current = [closeTimer];
+    } catch (error) {
+      setLoginIntegrationStage("blocked");
+      console.error(error);
+    }
   };
   type CompletedDashboardPage = {
     eyebrow: string;
@@ -5179,17 +8902,17 @@ function CompletedOnboardingDashboard({
   };
   const dashboardPages: Record<string, CompletedDashboardPage> = {
     launch: {
-      eyebrow: "Production gate",
+      eyebrow: "",
       title: launchGateStatus,
       summary: launchGateAllowed
-        ? "This agent is ready. Launch now, or review the final fix list first."
-        : "Choose one next step: fix the blockers, or come back and launch once they are clear.",
-      status: launchGateAllowed ? "Launch" : "Fix",
+        ? "This agent is ready."
+        : "Review the current checks before launch.",
+      status: launchGateAllowed ? "Launch" : "Review",
       metrics: [
         { label: "Launch score", value: `${launchGateScore}%`, detail: launchGateAllowed ? "Meets threshold" : "90% required" },
         { label: "Scenario pass rate", value: `${launchGateScenarioPassRate}%`, detail: "Customer test pack" },
         { label: "Required connections", value: `${launchGateConnectionScore}%`, detail: "CRM, calls, helpdesk" },
-        { label: "Critical blockers", value: String(launchGateCriticalFailures.length), detail: launchGateAllowed ? "None" : "Must fix" }
+        { label: "Attention", value: String(launchGateCriticalFailures.length), detail: launchGateAllowed ? "Clear" : "Review" }
       ],
       primaryTitle: "Launch requirements",
       primaryMeta: "Automatic checks that decide whether this workspace can launch.",
@@ -5198,7 +8921,7 @@ function CompletedOnboardingDashboard({
         { label: "Runtime and container", value: `${launchGateRuntimeScore}%`, note: "Service health, containers, workers, and resource limits must be stable." },
         { label: "Safety", value: `${launchGateSafetyScore}%`, note: "Critical safety failures must be zero." }
       ],
-      next: launchGateAllowed ? ["Launch agent", "Export launch proof", "Schedule first review"] : ["Run full gate", "Fix blockers", "Retest failed checks"]
+      next: launchGateAllowed ? ["Launch agent", "Export launch proof", "Schedule first review"] : ["Run gate checks", "Review activity", "Retest"]
     },
     metrics: {
       eyebrow: "Production readiness",
@@ -5221,88 +8944,25 @@ function CompletedOnboardingDashboard({
       ],
       next: ["Check attention items", "Improve top answers", "Export client report"]
     },
-    calls: {
-      eyebrow: "Customer conversations",
-      title: "Live call activity is easy to scan.",
-      summary: "Recent conversations are grouped by status so teams can see what was solved, what escalated, and what needs follow-up.",
-      status: "12 active",
+    risk: {
+      eyebrow: "Live operations",
+      title: "Every active chat and call is easy to manage.",
+      summary: "RelayClarity shows what AI is handling now, which customers need an agent, and which conversations should be handled first.",
+      status: `${humanHandoffConversations.length} agent needed`,
       metrics: [
-        { label: "Active now", value: "12", detail: "7 voice, 5 chat" },
-        { label: "Solved today", value: "34", detail: "No human needed" },
-        { label: "Avg duration", value: "3m 12s", detail: "Down 18 sec" },
-        { label: "Follow-ups", value: "5", detail: "Queued for CRM" }
+        { label: "Active chats", value: String(liveChatConversations.length), detail: "AI conversations now" },
+        { label: "Phone calls", value: String(livePhoneConversations.length), detail: "Live and recent voice" },
+        { label: "Agent needed", value: String(humanHandoffConversations.length), detail: "Ready for staff" },
+        { label: "Urgent", value: String(highPriorityConversations.length), detail: "Customer-impacting" }
       ],
-      primaryTitle: "Recent calls",
-      primaryMeta: "Latest customer moments with intent, outcome, and owner.",
-      timeline: [
-        { time: "12:44", title: "Invoice copy requested", detail: "AI verified account and sent the latest invoice.", tag: "Resolved" },
-        { time: "12:31", title: "Policy exception question", detail: "Sensitive guidance detected and moved to review.", tag: "Review" },
-        { time: "12:18", title: "Booking change", detail: "Captured new time preference and updated CRM.", tag: "Resolved" },
-        { time: "11:57", title: "Billing dispute", detail: "Transferred with summary and account context.", tag: "Handoff" }
-      ],
-      next: ["Open review calls", "Check CRM follow-ups", "Listen to flagged recording"]
-    },
-    handoffs: {
-      eyebrow: "Owner review",
-      title: "Handoffs are small and explainable.",
-      summary: "Every escalation has a reason, suggested owner, and the context needed for a fast human response.",
-      status: "3 pending",
-      metrics: [
-        { label: "Pending", value: "3", detail: "Needs owner" },
-        { label: "SLA risk", value: "1", detail: "Due in 22 min" },
-        { label: "Avg handoff", value: "41s", detail: "Context prepared" },
-        { label: "Resolved", value: "9", detail: "Today" }
-      ],
-      primaryTitle: "Handoff reasons",
-      primaryMeta: "The current review queue is mostly billing exceptions.",
-      bars: handoffReasons,
-      items: [
-        { label: "Billing exception", value: "2", note: "Needs finance owner approval." },
-        { label: "Sensitive policy", value: "1", note: "Check wording before customer reply." },
-        { label: "Knowledge gap", value: "0", note: "No unresolved answer gaps in queue." }
-      ],
-      next: ["Assign billing owner", "Approve policy response", "Close stale reviews"]
-    },
-    knowledge: {
-      eyebrow: "Answer quality",
-      title: "Knowledge is current enough to launch.",
-      summary: "RelayClarity is tracking answer coverage, stale sources, and the gaps most likely to affect customer trust.",
-      status: "91% confident",
-      metrics: [
-        { label: "Coverage", value: "91%", detail: "Approved sources" },
-        { label: "Draft answers", value: "2", detail: "Ready to review" },
-        { label: "Stale docs", value: "1", detail: "Pricing policy" },
-        { label: "Top intents", value: "8", detail: "Fully covered" }
-      ],
-      primaryTitle: "Knowledge gaps",
-      primaryMeta: "Small set of updates that would improve answer confidence.",
-      timeline: [
-        { time: "High", title: "Billing exception limits", detail: "Add what the agent can promise before finance review.", tag: "Draft" },
-        { time: "Med", title: "Holiday opening hours", detail: "Confirm the latest customer-facing schedule.", tag: "Needs source" },
-        { time: "Low", title: "Refund status wording", detail: "Tighten answer for pending bank transfers.", tag: "Improve" }
-      ],
-      next: ["Approve draft answers", "Upload policy source", "Retest top intents"]
-    },
-    workflows: {
-      eyebrow: "Agent routing",
-      title: "Workflows show where each request goes.",
-      summary: "The agent routes common customer intents to the right tool, owner, or handoff path with clear launch guardrails.",
-      status: "6 active",
-      metrics: [
-        { label: "Active flows", value: "6", detail: "All tested" },
-        { label: "Automations", value: "14", detail: "CRM and helpdesk" },
-        { label: "Guardrails", value: "11", detail: "Launch locked" },
-        { label: "Last test", value: "9m", detail: "Passed" }
-      ],
-      primaryTitle: "Routing map",
-      primaryMeta: "Core customer intents and where RelayClarity sends them.",
-      items: [
-        { label: "Account and billing", value: "CRM", note: "Verify account, summarize request, create follow-up." },
-        { label: "Urgent or sensitive", value: "Human", note: "Escalate with transcript and recommended owner." },
-        { label: "FAQs and policies", value: "Knowledge", note: "Answer only from approved sources." },
-        { label: "After-call admin", value: "Auto wrap-up", note: "Write summary, tags, and next action." }
-      ],
-      next: ["Review guardrails", "Run workflow test", "Publish routing changes"]
+      primaryTitle: "Live queue",
+      primaryMeta: "Grouped by channel, agent ownership, and customer impact.",
+      items: liveQueueItems.slice(0, 4).map((item) => ({
+        label: item.title,
+        value: item.status,
+        note: item.detail
+      })),
+      next: ["Take next customer", "Review urgent queue", "Export operations summary"]
     },
     integrations: {
       eyebrow: "Connected stack",
@@ -5318,7 +8978,202 @@ function CompletedOnboardingDashboard({
       primaryTitle: "System status",
       primaryMeta: "Connection health for the services the agent can read or update.",
       next: ["Run connection test", "Finish analytics export", "Review OAuth scopes"]
+    },
+    settings: {
+      eyebrow: "Workspace settings",
+      title: "Manage this workspace and account.",
+      summary: "Review workspace details, account access, and how this RelayClarity agent runs before and after launch.",
+      status: liveStatus,
+      metrics: [
+        { label: "Workspace", value: activeProject.name, detail: activeProject.businessType || activeProject.meta },
+        { label: "Account", value: user.name || user.email, detail: user.email },
+        { label: "Connected systems", value: String(completedConnectedCount), detail: "Active integrations" },
+        { label: "Readiness", value: `${readinessScore}%`, detail: liveStatus }
+      ],
+      primaryTitle: "Workspace and account",
+      primaryMeta: "Details RelayClarity uses to run this agent.",
+      items: [
+        { label: "Workspace", value: liveStatus, note: `${activeProject.name} · ${activeProject.businessType || activeProject.meta}.` },
+        { label: "Account owner", value: "Owner", note: `${user.name || "Not set"} · ${user.email}.` },
+        { label: "Connected systems", value: `${completedConnectedCount} active`, note: "CRM, telephony, and knowledge tools linked to this agent." },
+        { label: "Launch readiness", value: `${readinessScore}%`, note: "Scenario, runtime, and safety checks across this workspace." }
+      ],
+      next: ["Update workspace", "Manage account", "Review integrations"]
+    },
+    help: {
+      eyebrow: "Help and support",
+      title: "Get help with RelayClarity.",
+      summary: "Find setup guides, launch checklists, and ways to reach the team when you need a hand.",
+      status: "Online",
+      metrics: [
+        { label: "Support", value: "24/7", detail: "Email and chat" },
+        { label: "Status", value: "Healthy", detail: "No incidents" },
+        { label: "Avg reply", value: "2h", detail: "Email support" },
+        { label: "Guides", value: "Setup", detail: "Launch and tuning" }
+      ],
+      primaryTitle: "Guides and support",
+      primaryMeta: "Common questions and ways to reach the team.",
+      items: [
+        { label: "Connect a new system", value: "Integrations", note: "Open Integrations and choose Add integration to link a CRM, phone, or knowledge tool." },
+        { label: "Take this agent live", value: "Launch", note: "The Launch Gate runs the scenario, runtime, and safety checks that decide readiness." },
+        { label: "Handle escalated calls", value: "Live Queue", note: "The Live Queue shows every conversation that needs a human agent right now." },
+        { label: "Understand the metrics", value: "Metrics", note: "Metrics tracks containment, voice response time, and attention items across today." },
+        { label: "Email support", value: "2h reply", note: "Reach the RelayClarity team at support@relayclarity.ai — replies within 2 hours." }
+      ],
+      next: ["Browse setup guide", "Contact support", "View status page"]
     }
+  };
+  type SettingsRow = { label: string; value?: string; note?: string; goto?: string; href?: string };
+  type SettingsSection = { id: string; label: string; hint: string; title: string; summary: string; rows: SettingsRow[] };
+  const accountProviderLabel = user.provider === "google" ? "Google" : user.provider === "github" ? "GitHub" : "Email";
+  const settingsSections: SettingsSection[] = [
+    {
+      id: "workspace",
+      label: "Workspace",
+      hint: "Name and business type",
+      title: "Workspace",
+      summary: "How this workspace is described to the agent and your team.",
+      rows: [
+        { label: "Name", value: activeProject.name },
+        { label: "Business type", value: activeProject.businessType || activeProject.meta },
+        ...(activeProject.websiteUrl ? [{ label: "Website", value: activeProject.websiteUrl }] : []),
+        ...(activeProject.phoneContactNumber ? [{ label: "Phone", value: activeProject.phoneContactNumber }] : []),
+        { label: "Connected systems", value: `${completedConnectedCount} active`, note: "Manage what the agent can read and update.", goto: "integrations" },
+        { label: "Launch readiness", value: `${readinessScore}% · ${liveStatus}`, note: "Open the Launch Gate to see the checks.", goto: "launch" }
+      ]
+    },
+    {
+      id: "account",
+      label: "Account",
+      hint: "Profile and access",
+      title: "Account",
+      summary: "The person who owns and signs in to this workspace.",
+      rows: [
+        { label: "Name", value: user.name || "Not set" },
+        { label: "Email", value: user.email },
+        { label: "Sign-in", value: accountProviderLabel },
+        { label: "Workspaces", value: String(projects.length) }
+      ]
+    },
+    {
+      id: "agent",
+      label: "Agent",
+      hint: "Voice and handoffs",
+      title: "Agent behaviour",
+      summary: isOperationalDashboardLive
+        ? "Live signals that describe how the agent is handling customers today."
+        : "Production customer signals unlock after the Launch Gate is passed and the agent is launched.",
+      rows: isOperationalDashboardLive
+        ? [
+          { label: "Voice response", value: `${latencySeconds}s typical`, note: "Time a caller waits for the agent to reply." },
+          { label: "Solved without staff", value: `${containmentRate}%`, note: "Conversations resolved without a human handoff." },
+          { label: "Handoffs today", value: String(liveMetrics.handoffs), note: "Open the Live Queue to review them.", goto: "risk" },
+          { label: "Open attention", value: String(liveMetrics.openRisks), note: "Items waiting on a check across safety and knowledge." }
+        ]
+        : [
+          { label: "Production status", value: "Not live", note: "Launch the agent before customer activity appears here.", goto: "launch" },
+          { label: "Voice response", value: "Locked", note: "Live response timing is hidden until production traffic is enabled." },
+          { label: "Handoffs", value: "Locked", note: "Live Queue data unlocks after launch." },
+          { label: "Attention items", value: "Locked", note: "Operational review items unlock after launch." }
+        ]
+    },
+    {
+      id: "usage",
+      label: "Usage",
+      hint: "Calls and activity",
+      title: isOperationalDashboardLive ? "Usage today" : "Usage locked",
+      summary: isOperationalDashboardLive
+        ? "Live activity for this workspace today."
+        : "Customer calls, chats, and metrics are hidden until the agent is live.",
+      rows: isOperationalDashboardLive
+        ? [
+          { label: "Calls handled", value: String(liveMetrics.callsHandled), note: "Total customer calls so far today." },
+          { label: "Solved by AI", value: String(liveMetrics.containedCalls), note: "Calls handled without staff." },
+          { label: "Active now", value: String(liveMetrics.activeCalls), note: "Conversations in progress." },
+          { label: "Full metrics", value: "Open", note: "See trends and the hourly breakdown.", goto: "metrics" }
+        ]
+        : [
+          { label: "Calls", value: "Locked", note: "Launch the agent before live call data is visible.", goto: "launch" },
+          { label: "Chats", value: "Locked", note: "Live chat data unlocks after launch.", goto: "launch" },
+          { label: "Metrics", value: "Locked", note: "Production metrics unlock after launch.", goto: "launch" },
+          { label: "Live Queue", value: "Locked", note: "Active operations unlock after launch.", goto: "launch" }
+        ]
+    }
+  ];
+  const activeSettingsSection = settingsSections.find((section) => section.id === settingsTab) || settingsSections[0];
+  const helpSections: SettingsSection[] = [
+    {
+      id: "start",
+      label: "Getting started",
+      hint: "Set up your agent",
+      title: "Getting started",
+      summary: "The fastest path from a new workspace to a live customer agent.",
+      rows: [
+        { label: "Connect your systems", value: "Integrations", note: "Link a CRM, phone, and knowledge tool so handoffs carry context.", goto: "integrations" },
+        { label: "Ask the workspace assistant", value: "AI workspace", note: "Tell the agent which questions and tasks to handle first.", goto: "ai" },
+        { label: "Run launch checks", value: "Launch", note: "The Launch Gate runs scenario, runtime, and safety checks.", goto: "launch" },
+        { label: "Go live", value: "Launch", note: "Turn the agent on once readiness passes the threshold.", goto: "launch" }
+      ]
+    },
+    {
+      id: "guides",
+      label: "Guides",
+      hint: "Step-by-step help",
+      title: "Guides",
+      summary: "Walkthroughs for the main areas of the workspace.",
+      rows: [
+        { label: "Connect a new system", value: "Integrations", note: "Open Integrations and choose Add integration.", goto: "integrations" },
+        { label: "Take this agent live", value: "Launch", note: "Understand the Launch Gate checks and thresholds.", goto: "launch" },
+        {
+          label: "Handle escalated calls",
+          value: isOperationalDashboardLive ? "Live Queue" : "Locked",
+          note: isOperationalDashboardLive ? "See every conversation that needs a human now." : "Live Queue unlocks after launch.",
+          goto: isOperationalDashboardLive ? "risk" : "launch"
+        },
+        {
+          label: "Read the metrics",
+          value: isOperationalDashboardLive ? "Metrics" : "Locked",
+          note: isOperationalDashboardLive ? "Containment, response time, and attention items." : "Metrics unlock after launch.",
+          goto: isOperationalDashboardLive ? "metrics" : "launch"
+        }
+      ]
+    },
+    {
+      id: "faqs",
+      label: "FAQs",
+      hint: "Common questions",
+      title: "Frequently asked",
+      summary: "Quick answers to the questions teams ask most.",
+      rows: [
+        { label: "When can this agent go live?", note: "Once the Launch Gate readiness score passes the required threshold." },
+        { label: "Who handles escalated calls?", note: isOperationalDashboardLive ? "Conversations that need a person appear in the Live Queue for staff." : "Escalation handling unlocks in Live Queue after launch." },
+        { label: "How are metrics calculated?", note: isOperationalDashboardLive ? "From today's calls — containment, voice response time, and attention items." : "Production metrics are calculated after live customer traffic is enabled." },
+        { label: "Can I add more systems?", note: "Yes — Integrations supports CRM, phone, booking, and knowledge tools." }
+      ]
+    },
+    {
+      id: "contact",
+      label: "Contact",
+      hint: "Reach the team",
+      title: "Contact support",
+      summary: "Ways to reach the RelayClarity team when you need a hand.",
+      rows: [
+        { label: "Email support", value: "Email", note: "support@relayclarity.ai — replies within two hours.", href: "mailto:support@relayclarity.ai" },
+        { label: "Ask the workspace assistant", value: "AI workspace", note: isOperationalDashboardLive ? "Get instant answers about setup, metrics, and handoffs." : "Get instant answers about setup, integrations, and launch blockers.", goto: "ai" },
+        { label: "Review integrations", value: "Integrations", note: "Check what the agent can read and update.", goto: "integrations" }
+      ]
+    }
+  ];
+  const activeHelpSection = helpSections.find((section) => section.id === helpTab) || helpSections[0];
+  const openSettingsRoute = (route: string) => {
+    if (!isOperationalDashboardLive && isOperationalRoute(route)) {
+      setActiveRoute("launch");
+      setActiveMetricFocus(null);
+      return;
+    }
+
+    setActiveRoute(route);
+    setActiveMetricFocus(null);
   };
   const metricsTabs: MetricsTab[] = [
     {
@@ -5539,12 +9394,204 @@ function CompletedOnboardingDashboard({
         { label: "Retry count", value: String(liveMetrics.webhookErrors), note: "Connection and tool issues update live." }
       ],
       next: ["Run system check", "Finish reporting", "Review connections"]
-    }
+    },
+    (() => {
+      const evaluation = modelHealth.evaluation;
+      const model = modelHealth.model;
+      const drift = modelHealth.drift;
+      const feedback = modelHealth.feedback;
+
+      const accuracy = evaluation?.metrics?.accuracy;
+      const macroF1 = evaluation?.metrics?.macroF1;
+      const highRecall = evaluation?.metrics?.highRecall;
+      const highPrecision = evaluation?.metrics?.perClass?.high?.precision;
+      const ece = evaluation?.calibration?.expectedCalibrationError;
+      const p95LatencyMs = evaluation?.performance?.p95LatencyMs;
+      const throughputPerSec = evaluation?.performance?.throughputPerSec;
+      const costPer1k = evaluation?.performance?.estimatedCostPer1kGbp;
+      const tierDisparity = evaluation?.fairness?.customerTier?.disparityGap;
+      const gatePassed = evaluation?.deploymentGate?.passed;
+      const gateResults = evaluation?.deploymentGate?.results;
+
+      const modelVersion = model?.modelVersion;
+      const framework = model?.framework;
+      const trainedAt = model?.trainedAt;
+      const temperature = model?.calibration?.temperature;
+
+      const psi = drift?.populationStabilityIndex;
+      const driftStatus = drift?.status;
+      const sampleSize = drift?.sampleSize;
+      const liveTierDisparity = drift?.fairness?.attributes?.customerTier?.disparityGap;
+      const liveTierStatus = drift?.fairness?.attributes?.customerTier?.status;
+
+      const feedbackTotal = feedback?.total;
+      const agreementRate = feedback?.agreementRate;
+      const overridden = feedback?.overridden;
+
+      const pct = (value: number | undefined | null) => (value != null ? `${Math.round(value * 100)}%` : "—");
+      const passingGates = gateResults
+        ? Object.entries(gateResults).filter(([, value]) => value === true).map(([key]) => key)
+        : [];
+      // Keep card/badge VALUES short — long strings overlap their fixed containers; verbose text goes in the notes.
+      const shortVersion = modelVersion ? `v${String(modelVersion).split("-").pop()}` : "—";
+      const trainedDate = trainedAt ? String(trainedAt).slice(0, 10) : "";
+      const driftLabel = !driftStatus
+        ? "—"
+        : driftStatus === "insufficient_sample"
+          ? "No data"
+          : driftStatus.charAt(0).toUpperCase() + driftStatus.slice(1);
+
+      return {
+        id: "model",
+        label: "Model Health",
+        title: "Model health & governance",
+        summary: "Accuracy, calibration, fairness, and drift for the risk-scoring model.",
+        status: evaluation ? (gatePassed ? "Gate pass" : "Review") : "Awaiting data",
+        metrics: [
+          { label: "Accuracy", value: pct(accuracy), detail: "Offline evaluation" },
+          { label: "High-risk recall", value: pct(highRecall), detail: "Catches risky cases" },
+          { label: "Calibration (ECE)", value: ece != null ? ece.toFixed(3) : "—", detail: "Lower is better" },
+          { label: "p95 latency", value: p95LatencyMs != null ? `${p95LatencyMs.toFixed(2)}ms` : "—", detail: "Scoring time" }
+        ],
+        primaryTitle: "Model signals",
+        primaryMeta: "Offline evaluation plus live drift and feedback.",
+        chart: evaluation
+          ? [
+            { label: "Accuracy", value: accuracy != null ? accuracy * 100 : 0, display: pct(accuracy) },
+            { label: "Macro-F1", value: macroF1 != null ? macroF1 * 100 : 0, display: pct(macroF1) },
+            { label: "High recall", value: highRecall != null ? highRecall * 100 : 0, display: pct(highRecall) },
+            { label: "High prec", value: highPrecision != null ? highPrecision * 100 : 0, display: pct(highPrecision) },
+            { label: "Calibration", value: ece != null ? (1 - ece) * 100 : 0, display: ece != null ? ece.toFixed(3) : "—" }
+          ]
+          : [
+            { label: "Accuracy", value: 0, display: "—", empty: true },
+            { label: "Macro-F1", value: 0, display: "—", empty: true },
+            { label: "High recall", value: 0, display: "—", empty: true },
+            { label: "High prec", value: 0, display: "—", empty: true },
+            { label: "Calibration", value: 0, display: "—", empty: true }
+          ],
+        chartTotal: modelVersion ? shortVersion : "No model",
+        items: [
+          {
+            label: "Model version",
+            value: shortVersion,
+            note: modelVersion
+              ? `${modelVersion}${framework ? ` · ${framework}` : ""}${trainedDate ? ` · trained ${trainedDate}` : ""}`
+              : "No model registered yet."
+          },
+          {
+            label: "Calibration",
+            value: temperature != null ? `T ${Number(temperature).toFixed(2)}` : "—",
+            note: `Temperature scaling · ECE ${ece != null ? ece.toFixed(3) : "—"}`
+          },
+          {
+            label: "Throughput",
+            value: throughputPerSec != null ? `${Math.round(throughputPerSec).toLocaleString()}/s` : "—",
+            note: costPer1k != null ? `≈£${costPer1k} per 1k predictions` : "Cost not available yet."
+          },
+          {
+            label: "Drift status",
+            value: driftLabel,
+            note: sampleSize ? `PSI ${psi != null ? psi : "—"} · ${sampleSize} scored` : "Awaiting live traffic"
+          },
+          {
+            label: "Human agreement",
+            value: feedbackTotal ? pct(agreementRate) : "—",
+            note: feedbackTotal ? `${overridden != null ? overridden : 0} overrides logged` : "No feedback yet"
+          }
+        ],
+        checks: [
+          {
+            label: "Deployment gate",
+            value: evaluation ? (gatePassed ? "Pass" : "Review") : "—",
+            note: passingGates.length ? `Passing: ${passingGates.join(", ")}` : "No gate results yet."
+          },
+          {
+            label: "Fairness — customer tier",
+            value: tierDisparity != null ? tierDisparity.toFixed(2) : "—",
+            note: "Gap in high-risk rate across tiers; monitored, not auto-tuned."
+          },
+          {
+            label: "Live fairness",
+            value: liveTierDisparity != null ? liveTierDisparity.toFixed(2) : "—",
+            note: liveTierDisparity != null
+              ? `Live tier disparity${liveTierStatus ? ` · ${liveTierStatus}` : ""} from the drift report.`
+              : "Awaiting live traffic — needs scored cases."
+          }
+        ],
+        next: ["Open model card", "Review drift report", "Export feedback"]
+      };
+    })()
   ];
   const activeMetricsTabData = metricsTabs.find((tab) => tab.id === activeMetricsTab) || metricsTabs[0];
+  const activeMetricFocusForTab = activeMetricFocus?.tabId === activeMetricsTabData.id ? activeMetricFocus : null;
+  const focusedMetricCalls = activeMetricFocusForTab
+    ? metricCallRecords.filter((call) => {
+      if (activeMetricFocusForTab.chartId === "hourly-volume") {
+        return call.hourLabel === activeMetricFocusForTab.label;
+      }
+
+      if (activeMetricFocusForTab.chartId === "outcome-mix") {
+        if (activeMetricFocusForTab.label === "Solved by AI") return call.outcome === "Resolved";
+        if (activeMetricFocusForTab.label === "Human handoff") return call.outcome === "Handoff";
+        if (activeMetricFocusForTab.label === "Open risk") return call.outcome === "Review" || call.outcome === "Handoff";
+      }
+
+      if (activeMetricFocusForTab.chartId === "handoff-reasons") {
+        if (activeMetricFocusForTab.label === "Billing exception") return call.issueCategory === "Billing" && call.outcome !== "Resolved";
+        if (activeMetricFocusForTab.label === "Sensitive policy") return call.issueCategory === "Policy";
+        if (activeMetricFocusForTab.label === "Knowledge gap") return call.issueCategory === "Knowledge" || call.confidence < 82;
+      }
+
+      if (activeMetricFocusForTab.chartId === "knowledge-quality") {
+        if (activeMetricFocusForTab.label === "Source coverage") return call.outcome === "Resolved" && call.confidence >= 86;
+        if (activeMetricFocusForTab.label === "Lookup misses") return call.issueCategory === "Knowledge" || call.issueCategory === "Technical";
+        if (activeMetricFocusForTab.label === "Draft updates") return call.outcome === "Review";
+      }
+
+      return true;
+    }).slice(0, Math.max(1, activeMetricFocusForTab.pointValue))
+    : [];
+  const selectedPointShare = activeMetricFocusForTab
+    ? Math.round((activeMetricFocusForTab.pointValue / Math.max(1, activeMetricFocusForTab.chartData.reduce((total, point) => total + point.value, 0))) * 100)
+    : 0;
+  const focusedMetricsTabData: MetricsTab | null = activeMetricFocusForTab ? {
+    ...activeMetricsTabData,
+    title: `${activeMetricFocusForTab.chartTitle}: ${activeMetricFocusForTab.label}`,
+    summary: `Focused view for the exact data point opened from the AI workspace graph.`,
+    status: activeMetricFocusForTab.pointPercent !== undefined ? `${activeMetricFocusForTab.pointPercent}%` : activeMetricFocusForTab.pointDisplay,
+    metrics: [
+      { label: "Selected point", value: activeMetricFocusForTab.pointDisplay, detail: activeMetricFocusForTab.label },
+      { label: "Calls shown", value: String(focusedMetricCalls.length), detail: "Underlying records" },
+      { label: "Problems found", value: String(focusedMetricCalls.filter((call) => call.outcome !== "Resolved").length), detail: "Handoff, review, or abandoned" },
+      { label: "Avg confidence", value: `${Math.round(focusedMetricCalls.reduce((total, call) => total + call.confidence, 0) / Math.max(1, focusedMetricCalls.length))}%`, detail: "Across selected calls" }
+    ],
+    primaryTitle: activeMetricFocusForTab.label,
+    primaryMeta: `Opened from ${activeMetricFocusForTab.chartTitle}.`,
+    chart: activeMetricFocusForTab.chartData.map((point) => ({
+      label: point.label,
+      value: activeMetricFocusForTab.chartId === "hourly-volume"
+        ? point.value * 5
+        : Math.max(18, point.percent ?? point.value * 12),
+      display: point.display || String(point.value)
+    })),
+    chartTotal: activeMetricFocusForTab.value,
+    items: [
+      { label: "Call records", value: String(focusedMetricCalls.length), note: `${focusedMetricCalls.length} underlying call${focusedMetricCalls.length === 1 ? "" : "s"} are available for this selected metric.` },
+      { label: "Graph context", value: `${selectedPointShare}%`, note: `This point accounts for ${selectedPointShare}% of the currently visible ${activeMetricFocusForTab.chartTitle.toLowerCase()} data.` },
+      { label: "Current workspace", value: liveStatus, note: `${activeProject.name} is at ${readinessScore}% readiness with ${liveMetrics.openRisks} attention item${liveMetrics.openRisks === 1 ? "" : "s"}.` }
+    ],
+    checks: [
+      { label: "Resolved", value: String(focusedMetricCalls.filter((call) => call.outcome === "Resolved").length), note: "Calls completed by the AI without staff." },
+      { label: "Needs review", value: String(focusedMetricCalls.filter((call) => call.outcome !== "Resolved").length), note: "Calls with handoff, review, or incomplete outcomes." },
+      { label: "Transcript depth", value: "3 turns", note: "Each record includes customer, AI, and final system or AI turn." }
+    ],
+    next: ["Open calls behind this", "Compare trend", "Review related actions"]
+  } : null;
+  const displayedMetricsTabData = focusedMetricsTabData || activeMetricsTabData;
   const activeMetricsChart = [
-    ...activeMetricsTabData.chart,
-    ...Array.from({ length: Math.max(0, 8 - activeMetricsTabData.chart.length) }, (_, index) => ({
+    ...displayedMetricsTabData.chart,
+    ...Array.from({ length: Math.max(0, 8 - displayedMetricsTabData.chart.length) }, (_, index) => ({
       label: `empty-${index}`,
       value: 0,
       display: "",
@@ -5557,14 +9604,229 @@ function CompletedOnboardingDashboard({
   type DashboardProgressBar = { label: string; value: number; percent: number };
   const hasChart = (page: DashboardPage): page is DashboardPage & { chart: DashboardChartBar[] } => "chart" in page;
   const hasBars = (page: DashboardPage): page is DashboardPage & { bars: DashboardProgressBar[] } => "bars" in page;
-  const activeDashboardPage = activeRoute === "ai" ? null : dashboardPages[activeRoute];
+  const activeDashboardPage = activeRoute === "ai"
+    ? null
+    : !isOperationalDashboardLive && isOperationalRoute(activeRoute)
+      ? dashboardPages.launch
+      : dashboardPages[activeRoute] || dashboardPages.launch;
+  const openingAssistantTurn = assistantMessages[0];
+  const followUpAssistantMessages = assistantMessages.slice(1);
+  const currentAssistantCharts: WorkspaceAssistantChart[] = isOperationalDashboardLive ? [
+    {
+      id: "hourly-volume",
+      title: "Hourly call volume",
+      kind: "bar",
+      data: metricsHourlyVolume.map((hour) => ({
+        label: hour.label,
+        value: hour.value,
+        display: String(hour.value)
+      }))
+    },
+    {
+      id: "outcome-mix",
+      title: "Customer outcome mix",
+      kind: "progress",
+      data: [
+        { label: "Solved by AI", value: liveMetrics.containedCalls, display: `${containmentRate}%`, percent: containmentRate },
+        { label: "Human handoff", value: liveMetrics.handoffs, display: `${handoffRate}%`, percent: handoffRate },
+        { label: "Open risk", value: liveMetrics.openRisks, display: String(liveMetrics.openRisks), percent: Math.min(100, Math.round((liveMetrics.openRisks / Math.max(1, liveMetrics.callsHandled)) * 100)) }
+      ]
+    },
+    {
+      id: "handoff-reasons",
+      title: "Handoff reasons",
+      kind: "progress",
+      data: handoffReasons.map((reason) => ({
+        label: reason.label,
+        value: reason.value,
+        display: String(reason.value),
+        percent: reason.percent
+      }))
+    },
+    {
+      id: "knowledge-quality",
+      title: "Knowledge quality",
+      kind: "progress",
+      data: [
+        { label: "Source coverage", value: liveMetrics.citationCoverage, display: `${liveMetrics.citationCoverage}%`, percent: liveMetrics.citationCoverage },
+        { label: "Lookup misses", value: liveMetrics.retrievalMisses, display: String(liveMetrics.retrievalMisses), percent: Math.min(100, liveMetrics.retrievalMisses * 8) },
+        { label: "Draft updates", value: liveMetrics.draftAnswers, display: String(liveMetrics.draftAnswers), percent: Math.min(100, liveMetrics.draftAnswers * 12) }
+      ]
+    }
+  ] : [];
+  const openMetricPoint = (chart: WorkspaceAssistantChart, point: WorkspaceAssistantChart["data"][number]) => {
+    if (!isOperationalDashboardLive) {
+      setActiveRoute("launch");
+      setActiveMetricFocus(null);
+      return;
+    }
+
+    const chartTabMap: Record<string, string> = {
+      "hourly-volume": "overview",
+      "outcome-mix": "outcomes",
+      "handoff-reasons": "handoffs",
+      "knowledge-quality": "knowledge"
+    };
+    const tabId = chartTabMap[chart.id] || "overview";
+
+    setActiveMetricsTab(tabId);
+    setActiveMetricFocus({
+      tabId,
+      chartId: chart.id,
+      chartTitle: chart.title,
+      label: point.label,
+      value: buildChartPointTooltip(chart, point),
+      pointValue: point.value,
+      pointDisplay: point.display || String(point.value),
+      pointPercent: point.percent,
+      chartData: chart.data
+    });
+    setActiveRoute("metrics");
+  };
+  const clearAssistantReplyTimers = () => {
+    assistantReplyTimers.current.forEach((timer) => window.clearTimeout(timer));
+    assistantReplyTimers.current = [];
+  };
+  const typeAssistantReply = (reply: string, finalStatus: "idle" | "error", charts: WorkspaceAssistantChart[] = []) => {
+    clearAssistantReplyTimers();
+
+    setAssistantMessages((current) => [
+      ...current,
+      { role: "agent", content: "", charts }
+    ]);
+    setIsAssistantTyping(true);
+    setWorkspaceAssistantStatus("idle");
+
+    let currentIndex = 0;
+    const typeNextChunk = () => {
+      currentIndex = Math.min(reply.length, currentIndex + (currentIndex < 120 ? 4 : 7));
+      const nextContent = reply.slice(0, currentIndex);
+
+      setAssistantMessages((current) => current.map((chatMessage, index) => (
+        index === current.length - 1
+          ? { ...chatMessage, content: nextContent }
+          : chatMessage
+      )));
+
+      if (currentIndex >= reply.length) {
+        setIsAssistantTyping(false);
+        setWorkspaceAssistantStatus(finalStatus);
+        return;
+      }
+
+      const timer = window.setTimeout(typeNextChunk, 18);
+      assistantReplyTimers.current.push(timer);
+    };
+
+    const startTimer = window.setTimeout(typeNextChunk, 220);
+    assistantReplyTimers.current.push(startTimer);
+  };
 
   useEffect(() => {
     setLiveMetrics(createInitialLiveMetrics(activeProject));
+    setRiskApiState({ status: "idle", items: [], calls: [] });
     setWorkspaceAssistantCharts([]);
     setWorkspaceAssistantError("");
     setWorkspaceAssistantStatus("idle");
+    setActiveMetricFocus(null);
+    setSelectedRiskId(null);
+    setLaunchGateRunState("idle");
+    setIsLaunchDeployed(false);
+    launchFixTimers.current.forEach((timer) => window.clearTimeout(timer));
+    launchFixTimers.current = [];
+    setLaunchFixState("idle");
+    setLaunchFixSteps([]);
   }, [activeProject.id]);
+
+  useEffect(() => {
+    if (isOperationalDashboardLive || !isOperationalRoute(activeRoute)) {
+      return;
+    }
+
+    setActiveRoute("launch");
+    setActiveMetricFocus(null);
+    setOpenedLiveQueueId(null);
+  }, [activeRoute, isOperationalDashboardLive]);
+
+  useEffect(() => {
+    setLiveChatComposerText("");
+
+    if (!openedLiveQueueId) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      document.querySelector(".completed-main")?.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0 });
+    });
+  }, [openedLiveQueueId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fallbackCalls = createMetricCallRecords(activeProject, createInitialLiveMetrics(activeProject), liveHourLabels);
+
+    if (!isOperationalDashboardLive) {
+      setRiskApiState({ status: "idle", items: [], calls: [] });
+      setOpenedLiveQueueId(null);
+      return () => controller.abort();
+    }
+
+    setRiskApiState((current) => ({ ...current, status: "loading", error: undefined }));
+
+    fetchJsonFromApi<unknown>(`/api/risk/queue?projectId=${encodeURIComponent(activeProject.id)}`, {
+      signal: controller.signal
+    })
+      .then((payload) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const normalized = normalizeRiskQueuePayload(payload, fallbackCalls);
+
+        setRiskApiState({
+          status: normalized.items.length || normalized.calls.length ? "ready" : "fallback",
+          items: normalized.items,
+          calls: normalized.calls
+        });
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setRiskApiState({
+          status: "fallback",
+          items: [],
+          calls: [],
+          error: error instanceof Error ? error.message : "Risk queue API unavailable."
+        });
+      });
+
+    return () => controller.abort();
+  }, [activeProject.id, isOperationalDashboardLive]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    Promise.allSettled([
+      fetchJsonFromApi<any>("/api/risk/model", { signal: controller.signal }),
+      fetchJsonFromApi<any>("/api/risk/evaluation", { signal: controller.signal }),
+      fetchJsonFromApi<any>("/api/monitoring/drift-report", { signal: controller.signal }),
+      fetchJsonFromApi<any>("/api/monitoring/feedback-report", { signal: controller.signal })
+    ]).then((results) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      const [model, evaluation, drift, feedback] = results.map((result) =>
+        result.status === "fulfilled" ? result.value : null
+      );
+
+      setModelHealth({ model, evaluation, drift, feedback });
+    });
+
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -5579,6 +9841,24 @@ function CompletedOnboardingDashboard({
   }, [activeProjectId]);
 
   useEffect(() => clearIntegrationLoginTimers, []);
+  useEffect(() => clearAssistantReplyTimers, []);
+  useEffect(() => () => {
+    launchFixTimers.current.forEach((timer) => window.clearTimeout(timer));
+    launchFixTimers.current = [];
+  }, []);
+
+  useEffect(() => {
+    if (activeRoute !== "ai" || introStage !== "chat") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      assistantScrollAnchorRef.current?.scrollIntoView({
+        behavior: isAssistantTyping ? "auto" : "smooth",
+        block: "end"
+      });
+    });
+  }, [activeRoute, introStage, assistantMessages, isAssistantTyping, showAgentInsights, workspaceAssistantStatus, workspaceAssistantError]);
 
   useEffect(() => {
     const timers: number[] = [];
@@ -5617,15 +9897,41 @@ function CompletedOnboardingDashboard({
       return;
     }
 
+    const normalizedPrompt = prompt.toLowerCase();
+    const asksForLockedOperations =
+      !isOperationalDashboardLive &&
+      /\b(metric|metrics|call|calls|chat|chats|queue|conversation|conversations|handoff|handoffs|today|live)\b/.test(normalizedPrompt) &&
+      !/\b(launch|gate|test|tests|blocker|blockers|connect|integration|integrations)\b/.test(normalizedPrompt);
+
     const history = assistantMessages;
     setAssistantMessages((current) => [
       ...current,
       { role: "user", content: prompt }
     ]);
     setAssistantInput("");
-    setIsAssistantTyping(true);
+    setIsAssistantTyping(false);
     setWorkspaceAssistantStatus("loading");
     setWorkspaceAssistantError("");
+    clearAssistantReplyTimers();
+
+    if (asksForLockedOperations) {
+      typeAssistantReply(
+        `Live operational data is locked until ${activeProject.name} passes the Launch Gate and you launch the agent. Open **Launch Gate**, run the checks, fix any blockers, then use **Launch agent** to unlock metrics, calls, chats, and the live queue.`,
+        "idle"
+      );
+      return;
+    }
+
+    if (!isOperationalDashboardLive) {
+      const preLaunchReply = normalizedPrompt.includes("connect") || normalizedPrompt.includes("integration")
+        ? "**Pre-launch setup:** connect the required CRM, telephony, knowledge, and helpdesk systems, then return to **Launch Gate** and run the checks. Live metrics, calls, chats, and queue data unlock only after launch."
+        : normalizedPrompt.includes("launch") || normalizedPrompt.includes("gate") || normalizedPrompt.includes("test") || normalizedPrompt.includes("block")
+          ? `**Launch Gate is the control point:** run the gate checks for ${activeProject.name}, fix any failing requirements, and use **Launch agent** once the gate passes. Operational metrics, calls, chats, and live queue views remain hidden until then.`
+          : `This workspace is still pre-launch. I can help with setup, integrations, launch checks, and blocker fixes, but live metrics, calls, chats, and queue views unlock only after the agent is launched.`;
+
+      typeAssistantReply(preLaunchReply, "idle");
+      return;
+    }
 
     try {
       const response = await fetchJsonFromApi<WorkspaceAssistantResponse>("/api/dashboard/assistant", {
@@ -5644,30 +9950,195 @@ function CompletedOnboardingDashboard({
       });
 
       setWorkspaceAssistantCharts(response.charts || []);
-      setAssistantMessages((current) => [
-        ...current,
-        { role: "agent", content: response.reply }
-      ]);
-      setWorkspaceAssistantStatus("idle");
+      typeAssistantReply(response.reply, "idle", response.charts || []);
     } catch (error) {
-      const normalizedPrompt = prompt.toLowerCase();
       const reply = normalizedPrompt.includes("setup")
-        ? "I can help finish setup. The fastest path is to confirm the business type, connect CRM or helpdesk, choose the handoff rules, then run the launch evaluation pack."
+        ? "**Fastest setup path:**\n- Confirm the business type and priority call intents.\n- Connect CRM or helpdesk so handoffs carry customer context.\n- Choose the handoff rules for urgent, billing, and sensitive cases.\n- Run the launch evaluation pack before going live."
         : normalizedPrompt.includes("metric") || normalizedPrompt.includes("today")
-          ? `Current workspace metrics show ${containmentRate}% of customers solved without staff, ${liveMetrics.callsHandled} customer calls handled, ${liveMetrics.handoffs} handoff${liveMetrics.handoffs === 1 ? "" : "s"} needing review, and ${latencySeconds}s voice response time.`
+          ? `**Today so far:**\n- **${liveMetrics.callsHandled}** customer calls handled.\n- **${containmentRate}%** solved without staff.\n- **${liveMetrics.handoffs}** handoff${liveMetrics.handoffs === 1 ? "" : "s"} needing review.\n- **${latencySeconds}s** typical voice response time.`
           : normalizedPrompt.includes("handoff")
-            ? `There are ${liveMetrics.handoffs} handoff${liveMetrics.handoffs === 1 ? "" : "s"} needing owner review. The biggest areas are billing questions, sensitive cases, and deadline risk.`
-            : "I can help with setup, metrics, calls, handoffs, knowledge gaps, workflow routing, integrations, launch reports, or agent tuning. Tell me the outcome you want and I will map the next steps.";
+            ? `There are **${liveMetrics.handoffs}** handoff${liveMetrics.handoffs === 1 ? "" : "s"} needing owner review.\n- **Billing questions** need a policy-safe answer or owner approval.\n- **Sensitive cases** should transfer with full context.\n- **Deadline risk** needs a clear next owner.`
+            : "**I can help with:**\n- Setup and launch checks.\n- Metrics, calls, and handoffs.\n- Knowledge gaps and workflow routing.\n- Integrations, launch reports, and agent tuning.";
 
       setWorkspaceAssistantError(error instanceof Error ? error.message : "Workspace assistant is using offline fallback.");
-      setAssistantMessages((current) => [
-        ...current,
-        { role: "agent", content: reply }
-      ]);
-      setWorkspaceAssistantStatus("error");
-    } finally {
-      setIsAssistantTyping(false);
+      typeAssistantReply(reply, "error", currentAssistantCharts);
     }
+  };
+  const launchFixRemediations: Record<string, { note: string; apply: (current: LiveWorkspaceMetrics) => Partial<LiveWorkspaceMetrics>; connect?: boolean }> = {
+    "Customer accuracy": {
+      note: "Approving top knowledge sources and tightening low-confidence handling",
+      apply: (current) => ({
+        citationCoverage: Math.max(current.citationCoverage, 97),
+        firstContactResolution: Math.max(current.firstContactResolution, 90),
+        asrConfidence: Math.max(current.asrConfidence, 97),
+        recontactRate: Math.min(current.recontactRate, 3),
+        lowConfidenceAnswers: Math.min(current.lowConfidenceAnswers, 1),
+        retrievalMisses: Math.min(current.retrievalMisses, 1),
+        containedCalls: Math.max(current.containedCalls, Math.round(current.callsHandled * 0.95))
+      })
+    },
+    "Production systems": {
+      note: "Reconnecting required systems and re-running connection checks",
+      connect: true,
+      apply: (current) => ({
+        crmLookupSuccess: Math.max(current.crmLookupSuccess, 99),
+        ticketWriteSuccess: Math.max(current.ticketWriteSuccess, 99),
+        knowledgeSyncMinutes: Math.min(current.knowledgeSyncMinutes, 3)
+      })
+    },
+    "Runtime health": {
+      note: "Clearing webhook errors, reducing latency, and recovering workers",
+      apply: (current) => ({
+        webhookErrors: 0,
+        p95LatencyMs: Math.min(current.p95LatencyMs, 1300),
+        failedTurns: 0
+      })
+    },
+    "Safety guardrails": {
+      note: "Closing policy gaps and routing sensitive cases correctly",
+      apply: (current) => ({
+        policyViolations: 0,
+        unsupportedAttempts: Math.min(current.unsupportedAttempts, 2),
+        draftAnswers: Math.min(current.draftAnswers, 2),
+        sensitiveEscalations: Math.min(current.sensitiveEscalations, 2),
+        lowConfidenceAnswers: Math.min(current.lowConfidenceAnswers, 1)
+      })
+    }
+  };
+  const scoreLaunchScenario = (metrics: LiveWorkspaceMetrics) => {
+    const containment = Math.round((metrics.containedCalls / Math.max(1, metrics.callsHandled)) * 100);
+    return Math.round(
+      containment * 0.26 +
+        metrics.firstContactResolution * 0.24 +
+        metrics.citationCoverage * 0.18 +
+        metrics.asrConfidence * 0.14 +
+        Math.max(0, 100 - metrics.recontactRate * 5) * 0.1 +
+        Math.max(0, 100 - metrics.lowConfidenceAnswers * 7) * 0.08
+    );
+  };
+  const scoreLaunchRuntime = (metrics: LiveWorkspaceMetrics) => Math.max(86, Math.min(99, Math.round(
+    98 - metrics.webhookErrors * 6 - Math.max(0, metrics.p95LatencyMs - 1500) / 120 - metrics.failedTurns * 1.5
+  )));
+  const scoreLaunchSafety = (metrics: LiveWorkspaceMetrics) => metrics.policyViolations === 0
+    ? Math.max(90, 100 - metrics.lowConfidenceAnswers * 3 - metrics.sensitiveEscalations)
+    : Math.max(0, 78 - metrics.policyViolations * 12);
+  const diagnoseAndFixLaunch = () => {
+    if (launchFixState === "fixing" || launchGateFailingTests.length === 0) {
+      return;
+    }
+
+    const plan = launchGateFailingTests
+      .map((test) => ({ test, remediation: launchFixRemediations[test.label] }))
+      .filter((entry) => entry.remediation);
+
+    if (plan.length === 0) {
+      return;
+    }
+
+    // 1. Hand the failing checks to the AI workspace as a real user turn.
+    const problemReport = plan
+      .map(({ test }) => {
+        const failedChecks = test.checks.filter((check) => !check.passed);
+        const checkLines = failedChecks.length
+          ? failedChecks.map((check) => `  - ${check.name}: ${check.value}`).join("\n")
+          : "  - Score below the required threshold.";
+        return `### ${test.label} — ${test.value} (needs ${test.required})\n${checkLines}`;
+      })
+      .join("\n\n");
+    const userMessage = [
+      `The launch gate for ${activeProject.name} is blocked at ${launchGateScore}% (launch requires ${launchGateThreshold}%).`,
+      `Diagnose every failing check below and fix it so this agent can launch:`,
+      "",
+      problemReport
+    ].join("\n");
+
+    // Compute the repaired metrics up front so the AI can both apply and chart the result.
+    const fixedMetrics = plan.reduce(
+      (metrics, entry) => ({ ...metrics, ...entry.remediation.apply(metrics) }),
+      liveMetrics
+    );
+    const fixedScenario = scoreLaunchScenario(fixedMetrics);
+    const fixedRuntime = scoreLaunchRuntime(fixedMetrics);
+    const fixedConnection = 100;
+    const fixedSafety = scoreLaunchSafety(fixedMetrics);
+    const fixedOverall = Math.round(
+      fixedScenario * 0.38 + fixedConnection * 0.24 + fixedRuntime * 0.22 + fixedSafety * 0.16
+    );
+
+    launchFixTimers.current.forEach((timer) => window.clearTimeout(timer));
+    launchFixTimers.current = [];
+    clearAssistantReplyTimers();
+    setActiveMetricFocus(null);
+    setActiveRoute("ai");
+    setIntroStage("chat");
+    document.querySelector(".completed-main")?.scrollTo({ top: 0 });
+    setLaunchFixState("fixing");
+    setLaunchFixSteps(plan.map((entry, index) => ({
+      label: launchFixRemediations[entry.test.label].note,
+      status: index === 0 ? "fixing" : "queued"
+    })));
+    setAssistantMessages((current) => [...current, { role: "user", content: userMessage }]);
+    setIsAssistantTyping(false);
+    setWorkspaceAssistantStatus("loading");
+    setWorkspaceAssistantError("");
+
+    // 2. Apply the real metric repairs one check at a time.
+    const stepDuration = 900;
+    plan.forEach((entry, index) => {
+      launchFixTimers.current.push(window.setTimeout(() => {
+        setLiveMetrics((current) => ({ ...current, ...entry.remediation.apply(current) }));
+        if (entry.remediation.connect) {
+          setConnectedCompletedIntegrationIds((current) => {
+            const required = ["hubspot", "zoom", "notion", "zendesk"];
+            const merged = [...current];
+            required.forEach((id) => {
+              if (!merged.includes(id)) {
+                merged.push(id);
+              }
+            });
+            return merged;
+          });
+        }
+
+        setLaunchFixSteps((current) => current.map((step, stepIndex) => {
+          if (stepIndex === index) {
+            return { ...step, status: "done" };
+          }
+          if (stepIndex === index + 1) {
+            return { ...step, status: "fixing" };
+          }
+          return step;
+        }));
+      }, stepDuration * (index + 1)));
+    });
+
+    // 3. The AI confirms the fix and renders the launch-gate readiness graph.
+    launchFixTimers.current.push(window.setTimeout(() => {
+      setLaunchFixState("fixed");
+      const launchGateChart: WorkspaceAssistantChart = {
+        id: "launch-gate",
+        title: "Launch gate readiness",
+        kind: "progress",
+        data: [
+          { label: "Customer accuracy", value: fixedScenario, display: `${fixedScenario}%`, percent: fixedScenario },
+          { label: "Production systems", value: fixedConnection, display: `${fixedConnection}%`, percent: fixedConnection },
+          { label: "Runtime health", value: fixedRuntime, display: `${fixedRuntime}%`, percent: fixedRuntime },
+          { label: "Safety guardrails", value: fixedSafety, display: `${fixedSafety}%`, percent: fixedSafety },
+          { label: "Launch score", value: fixedOverall, display: `${fixedOverall}%`, percent: fixedOverall }
+        ]
+      };
+      const fixSummary = plan
+        .map(({ test }) => `- **${test.label}** — ${launchFixRemediations[test.label].note.toLowerCase()}.`)
+        .join("\n");
+      const reply = [
+        `**Fixed.** I worked through each failing launch check and applied the repairs:`,
+        "",
+        fixSummary,
+        "",
+        `The launch gate is now at **${fixedOverall}%** (threshold ${launchGateThreshold}%) — every check is passing and the agent is clear to launch.`
+      ].join("\n");
+      typeAssistantReply(reply, "idle", [launchGateChart]);
+    }, stepDuration * plan.length + 500));
   };
 
   return (
@@ -5680,7 +10151,10 @@ function CompletedOnboardingDashboard({
         <button
           className={`completed-launch-sidebar-card ${launchGateAllowed ? "is-ready" : "is-locked"}`}
           type="button"
-          onClick={() => setActiveRoute("launch")}
+          onClick={() => {
+            setActiveRoute("launch");
+            setActiveMetricFocus(null);
+          }}
           aria-label={`Open Launch Gate. ${launchGateStatus}, ${launchGateScore}%`}
         >
           <span aria-hidden="true"></span>
@@ -5695,9 +10169,23 @@ function CompletedOnboardingDashboard({
           {routes.map((route) => (
             <button
               key={route.id}
-              className={route.id === activeRoute ? "is-active" : ""}
+              className={[
+                route.id === activeRoute ? "is-active" : "",
+                !isOperationalDashboardLive && isOperationalRoute(route.id) ? "is-locked" : ""
+              ].filter(Boolean).join(" ")}
               type="button"
-              onClick={() => setActiveRoute(route.id)}
+              disabled={!isOperationalDashboardLive && isOperationalRoute(route.id)}
+              aria-disabled={!isOperationalDashboardLive && isOperationalRoute(route.id)}
+              onClick={() => {
+                if (!isOperationalDashboardLive && isOperationalRoute(route.id)) {
+                  setActiveRoute("launch");
+                  setActiveMetricFocus(null);
+                  return;
+                }
+
+                setActiveRoute(route.id);
+                setActiveMetricFocus(null);
+              }}
             >
               <span>{route.title}</span>
               <small>{route.meta}</small>
@@ -5706,8 +10194,26 @@ function CompletedOnboardingDashboard({
         </nav>
 
         <div className="completed-sidebar-footer">
-          <button className="completed-footer-link" type="button">Settings</button>
-          <button className="completed-footer-link" type="button">Help</button>
+          <button
+            className={`completed-footer-link ${activeRoute === "settings" ? "is-active" : ""}`}
+            type="button"
+            onClick={() => {
+              setActiveRoute("settings");
+              setActiveMetricFocus(null);
+            }}
+          >
+            Settings
+          </button>
+          <button
+            className={`completed-footer-link ${activeRoute === "help" ? "is-active" : ""}`}
+            type="button"
+            onClick={() => {
+              setActiveRoute("help");
+              setActiveMetricFocus(null);
+            }}
+          >
+            Help
+          </button>
           <button className="completed-account" type="button" onClick={onSignOut} aria-label="Sign out">
             {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : <span>{workspaceInitial}</span>}
             <strong>{user.name || user.email}</strong>
@@ -5716,7 +10222,7 @@ function CompletedOnboardingDashboard({
       </aside>
 
       <section className="completed-main">
-        <header className="completed-topbar">
+        <header className={`completed-topbar ${activeRoute === "risk" && isOperationalDashboardLive ? "has-live-ops-search" : ""}`}>
           <div
             className="completed-route-selector"
             onBlur={(event) => {
@@ -5762,6 +10268,15 @@ function CompletedOnboardingDashboard({
               </div>
             ) : null}
           </div>
+          {activeRoute === "risk" && isOperationalDashboardLive ? (
+            <div className="live-ops-tools">
+              <label aria-label="Search conversations">
+                <span>⌕</span>
+                <input type="search" placeholder="Search conversations, customers..." />
+                <kbd>⌘ K</kbd>
+              </label>
+            </div>
+          ) : null}
         </header>
 
         <div className={`completed-content ${activeDashboardPage ? "is-dashboard-page" : ""}`}>
@@ -5769,30 +10284,42 @@ function CompletedOnboardingDashboard({
             <section
               className={[
                 "completed-route-page",
-                activeRoute === "launch" ? "is-launch" : "",
-                activeRoute === "metrics" ? "is-metrics" : "",
-                activeRoute === "integrations" ? "is-integrations" : ""
+                activeRoute === "launch" || (!isOperationalDashboardLive && isOperationalRoute(activeRoute)) ? "is-launch" : "",
+                activeRoute === "metrics" && isOperationalDashboardLive ? "is-metrics" : "",
+                activeRoute === "integrations" ? "is-integrations" : "",
+                activeRoute === "risk" && isOperationalDashboardLive ? "is-risk" : "",
+                activeRoute === "settings" || activeRoute === "help" ? "is-simple" : ""
               ].filter(Boolean).join(" ")}
               aria-labelledby="completed-route-title"
             >
-              <header className="completed-route-hero">
-                <div>
-                  <span>{activeDashboardPage.eyebrow}</span>
-                  <h1 id="completed-route-title">{activeDashboardPage.title}</h1>
-                  <p>{activeDashboardPage.summary}</p>
-                </div>
-                <strong>{activeDashboardPage.status}</strong>
-              </header>
+              {activeRoute !== "launch" && activeRoute !== "launch-tests" && activeRoute !== "risk" && activeRoute !== "settings" && activeRoute !== "help" && !(!isOperationalDashboardLive && isOperationalRoute(activeRoute)) ? (
+                <header className="completed-route-hero">
+                  <div>
+                    <span>{activeDashboardPage.eyebrow}</span>
+                    <h1 id="completed-route-title">{activeDashboardPage.title}</h1>
+                    <p>{activeDashboardPage.summary}</p>
+                  </div>
+                  <strong>{activeDashboardPage.status}</strong>
+                </header>
+              ) : null}
 
-              {activeRoute === "metrics" ? (
-		                <section className="completed-metrics-studio" aria-label="Metrics overview">
+              {activeRoute === "metrics" && isOperationalDashboardLive ? (
+		                <section className={`completed-metrics-studio ${activeMetricFocusForTab ? "has-focus" : ""}`} aria-label="Metrics overview">
 		                  <div className="completed-metrics-title-row">
 		                    <div>
-		                      <h2>Production metrics</h2>
-		                      <p>Live workspace signals refresh every second while this agent is being set up, tested, and monitored.</p>
+		                      <h2>{displayedMetricsTabData.title}</h2>
+		                      <p>{displayedMetricsTabData.summary}</p>
 		                    </div>
 		                    <strong><span aria-hidden="true"></span>{metricsStudioStatus}</strong>
 		                  </div>
+                      {activeMetricFocusForTab ? (
+                        <div className="completed-metrics-focus" role="status">
+                          <span>{activeMetricFocusForTab.chartTitle}</span>
+                          <strong>{activeMetricFocusForTab.label}</strong>
+                          <small>{activeMetricFocusForTab.value}</small>
+                          <button type="button" onClick={() => setActiveMetricFocus(null)} aria-label="Clear selected metric">×</button>
+                        </div>
+                      ) : null}
 
                     <div className="completed-metrics-tabs" role="tablist" aria-label="Metrics sections">
                       {metricsTabs.map((tab) => (
@@ -5801,7 +10328,10 @@ function CompletedOnboardingDashboard({
                           type="button"
                           role="tab"
                           aria-selected={tab.id === activeMetricsTabData.id}
-                          onClick={() => setActiveMetricsTab(tab.id)}
+                          onClick={() => {
+                            setActiveMetricsTab(tab.id);
+                            setActiveMetricFocus(null);
+                          }}
                           key={tab.id}
                         >
                           {tab.label}
@@ -5810,13 +10340,10 @@ function CompletedOnboardingDashboard({
                     </div>
 
 	                  <div className="completed-metrics-kpi-rail" aria-label={`${activeRouteData.title} metrics`}>
-	                    {activeMetricsTabData.metrics.map((metric, index) => (
+	                    {displayedMetricsTabData.metrics.map((metric, index) => (
 	                      <article className={index === 0 ? "is-primary" : ""} key={metric.label}>
-	                        <div className="completed-kpi-icon" aria-hidden="true">
-	                          {index === 0 ? "✓" : index === 1 ? "⌕" : index === 2 ? "ϟ" : index === 3 ? "☆" : "•"}
-	                        </div>
-	                        <span>{metric.label}</span>
 	                        <strong>{metric.value}</strong>
+	                        <span>{metric.label}</span>
                         <small>{metric.detail}</small>
                       </article>
                     ))}
@@ -5826,14 +10353,14 @@ function CompletedOnboardingDashboard({
 	                    <section className="completed-metrics-trend" aria-labelledby="completed-metrics-trend-title">
 	                      <div className="completed-metrics-panel-heading">
 	                        <div>
-	                          <span>{activeMetricsTabData.primaryMeta}</span>
-	                          <h2 id="completed-metrics-trend-title">{activeMetricsTabData.primaryTitle}</h2>
+	                          <span>{displayedMetricsTabData.primaryMeta}</span>
+	                          <h2 id="completed-metrics-trend-title">{displayedMetricsTabData.primaryTitle}</h2>
 	                        </div>
-	                        <strong>{activeMetricsTabData.chartTotal}</strong>
+	                        <strong>{displayedMetricsTabData.chartTotal}</strong>
 	                      </div>
 
-                        <div className={`completed-metrics-visual is-${activeMetricsTabData.id}`} aria-label={activeMetricsTabData.primaryTitle}>
-                          {activeMetricsTabData.id === "overview" ? (
+                        <div className={`completed-metrics-visual is-${displayedMetricsTabData.id}`} aria-label={displayedMetricsTabData.primaryTitle}>
+                          {displayedMetricsTabData.id === "overview" ? (
                             <div className="completed-metrics-chart">
                               <div className="completed-metrics-chart-scale" aria-hidden="true">
                                 <span>High</span>
@@ -5842,48 +10369,55 @@ function CompletedOnboardingDashboard({
                                 <span>0</span>
                               </div>
                               {activeMetricsChart.map((bar, index) => (
-                                <div className={`completed-metrics-chart-bar ${bar.empty ? "is-empty" : ""}`} key={`${bar.label}-${index}`}>
+                                <div
+                                  className={[
+                                    "completed-metrics-chart-bar",
+                                    bar.empty ? "is-empty" : "",
+                                    activeMetricFocusForTab?.label === bar.label ? "is-focused-point" : ""
+                                  ].filter(Boolean).join(" ")}
+                                  key={`${bar.label}-${index}`}
+                                >
                                   <i style={{ height: `${bar.value}px` }}></i>
                                   <b>{bar.display || Math.round(bar.value / 5)}</b>
                                   <span>{bar.label}</span>
                                 </div>
                               ))}
                             </div>
-                          ) : activeMetricsTabData.id === "outcomes" ? (
+                          ) : displayedMetricsTabData.id === "outcomes" ? (
                             <div className="completed-outcome-visual">
                               <div className="completed-outcome-stack" aria-hidden="true">
-                                {activeMetricsTabData.chart.slice(0, 4).map((bar) => (
+                                {displayedMetricsTabData.chart.slice(0, 4).map((bar) => (
                                   <i key={bar.label} style={{ width: `${Math.max(10, Math.min(58, bar.value / 3))}%` }}></i>
                                 ))}
                               </div>
                               <div className="completed-outcome-grid">
-                                {activeMetricsTabData.chart.map((bar) => (
-                                  <article key={bar.label}>
+                                {displayedMetricsTabData.chart.map((bar) => (
+                                  <article className={activeMetricFocusForTab?.label === bar.label ? "is-focused-point" : ""} key={bar.label}>
                                     <strong>{bar.display}</strong>
                                     <span>{bar.label}</span>
                                   </article>
                                 ))}
                               </div>
                             </div>
-                          ) : activeMetricsTabData.id === "voice" ? (
+                          ) : displayedMetricsTabData.id === "voice" ? (
                             <div className="completed-voice-visual">
                               <div className="completed-voice-line" aria-hidden="true">
-                                {activeMetricsTabData.chart.map((bar) => (
+                                {displayedMetricsTabData.chart.map((bar) => (
                                   <i key={bar.label} style={{ height: `${Math.max(18, Math.min(96, bar.value / 2))}px` }}></i>
                                 ))}
                               </div>
                               <div className="completed-voice-grid">
-                                {activeMetricsTabData.chart.map((bar) => (
-                                  <article key={bar.label}>
+                                {displayedMetricsTabData.chart.map((bar) => (
+                                  <article className={activeMetricFocusForTab?.label === bar.label ? "is-focused-point" : ""} key={bar.label}>
                                     <span>{bar.label}</span>
                                     <strong>{bar.display}</strong>
                                   </article>
                                 ))}
                               </div>
                             </div>
-                          ) : activeMetricsTabData.id === "knowledge" ? (
+                          ) : displayedMetricsTabData.id === "knowledge" ? (
                             <div className="completed-knowledge-visual">
-                              {activeMetricsTabData.items.map((item) => (
+                              {displayedMetricsTabData.items.map((item) => (
                                 <article key={item.label}>
                                   <span>{item.value}</span>
                                   <div>
@@ -5893,9 +10427,9 @@ function CompletedOnboardingDashboard({
                                 </article>
                               ))}
                             </div>
-                          ) : activeMetricsTabData.id === "safety" ? (
+                          ) : displayedMetricsTabData.id === "safety" ? (
                             <div className="completed-safety-visual">
-                              {activeMetricsTabData.metrics.map((metric) => (
+                              {displayedMetricsTabData.metrics.map((metric) => (
                                 <article key={metric.label}>
                                   <span>{metric.label}</span>
                                   <strong>{metric.value}</strong>
@@ -5903,10 +10437,10 @@ function CompletedOnboardingDashboard({
                                 </article>
                               ))}
                             </div>
-                          ) : activeMetricsTabData.id === "handoffs" ? (
+                          ) : displayedMetricsTabData.id === "handoffs" ? (
                             <div className="completed-handoff-visual">
-                              {activeMetricsTabData.chart.map((bar) => (
-                                <article key={bar.label}>
+                              {displayedMetricsTabData.chart.map((bar) => (
+                                  <article className={activeMetricFocusForTab?.label === bar.label ? "is-focused-point" : ""} key={bar.label}>
                                   <div>
                                     <span>{bar.label}</span>
                                     <strong>{bar.display}</strong>
@@ -5917,7 +10451,7 @@ function CompletedOnboardingDashboard({
                             </div>
                           ) : (
                             <div className="completed-system-visual">
-                              {activeMetricsTabData.items.map((item) => (
+                              {displayedMetricsTabData.items.map((item) => (
                                 <article key={item.label}>
                                   <span>{item.label}</span>
                                   <strong>{item.value}</strong>
@@ -5927,10 +10461,58 @@ function CompletedOnboardingDashboard({
                             </div>
                           )}
                         </div>
-                        <div className="completed-demand-note">
-                          <span aria-hidden="true">✦</span>
-                          {activeMetricsTabData.items[0]?.label}: {activeMetricsTabData.items[0]?.note}
+                        <div className={`completed-demand-note ${activeMetricFocusForTab ? "is-focused" : ""}`}>
+                          {activeMetricFocusForTab
+                            ? `${activeMetricFocusForTab.chartTitle}: ${activeMetricFocusForTab.label} is the selected point from the AI workspace graph.`
+                            : `${displayedMetricsTabData.items[0]?.label}: ${displayedMetricsTabData.items[0]?.note}`}
                         </div>
+                        {activeMetricFocusForTab ? (
+                          <section className="completed-call-drilldown" aria-label={`Calls for ${activeMetricFocusForTab.label}`}>
+                            <div className="completed-call-drilldown-heading">
+                              <div>
+                                <span>Underlying calls</span>
+                                <h3>{focusedMetricCalls.length} call{focusedMetricCalls.length === 1 ? "" : "s"} behind this point</h3>
+                              </div>
+                              <strong>{focusedMetricCalls.filter((call) => call.outcome !== "Resolved").length} need review</strong>
+                            </div>
+                            <div className="completed-call-list">
+                              {focusedMetricCalls.map((call) => (
+                                <article className={`completed-call-card is-${call.outcome.toLowerCase()}`} key={call.id}>
+                                  <header>
+                                    <div>
+                                      <span>{call.time} · {call.duration}</span>
+                                      <strong>{call.intent}</strong>
+                                      <small>{call.callerName} · {call.phone}</small>
+                                    </div>
+                                    <b>{call.outcome}</b>
+                                  </header>
+                                  <dl>
+                                    <div>
+                                      <dt>AI action</dt>
+                                      <dd>{call.aiAction}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>What went wrong</dt>
+                                      <dd>{call.wentWrong}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Confidence</dt>
+                                      <dd>{call.confidence}%</dd>
+                                    </div>
+                                  </dl>
+                                  <div className="completed-call-transcript">
+                                    {call.transcript.map((turn, turnIndex) => (
+                                      <p className={`is-${turn.speaker.toLowerCase()}`} key={`${call.id}-${turn.speaker}-${turnIndex}`}>
+                                        <span>{turn.speaker}</span>
+                                        {turn.text}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          </section>
+                        ) : null}
 	                    </section>
 
 	                    <aside className="completed-metrics-summary" aria-label="Health summary">
@@ -5939,71 +10521,758 @@ function CompletedOnboardingDashboard({
 		                          <span>Operating checks</span>
 		                          <h2>Key signals</h2>
 		                        </div>
-		                        <strong>{activeMetricsTabData.status}</strong>
+		                        <strong>{displayedMetricsTabData.status}</strong>
 	                      </div>
 
                         <div className="completed-metrics-health-list">
-                          {(activeMetricsTabData.checks || activeMetricsTabData.items).map((item, index) => (
+                          {(displayedMetricsTabData.checks || displayedMetricsTabData.items).map((item, index) => (
                             <article key={item.label}>
-                              <i aria-hidden="true">{index === 0 ? "✧" : index === 1 ? "↱" : "⌘"}</i>
                               <span>{item.value}</span>
                               <div>
                                 <strong>{item.label}</strong>
                                 <p>{item.note}</p>
                               </div>
-                              <b aria-hidden="true">›</b>
+                              <b aria-hidden="true">→</b>
                             </article>
                           ))}
                         </div>
 
-	                      <div className="completed-metrics-actions">
-	                        <span>Next</span>
-	                        {activeMetricsTabData.next.map((action) => (
-	                          <button type="button" key={action}>{action}<span aria-hidden="true">›</span></button>
-	                        ))}
-	                      </div>
 		                    </aside>
 		                  </div>
 		                </section>
-	              ) : activeRoute === "launch" ? (
-		                <section className="completed-launch-gate" aria-label="Launch gate decision">
-		                  <div className="completed-launch-decision">
-		                    <div>
-		                      <span>Launchgate</span>
-		                      <h2>{launchGateAllowed ? "Launch or make final fixes." : "Fix before launch."}</h2>
-		                      <p>{launchGateAllowed ? "Everything required for launch is passing. You can still open the fix path if you want to review the final checklist." : launchGateStatusDetail}</p>
-		                    </div>
-		                    <div className="completed-launch-score" aria-label={`Launch score ${launchGateScore}%`}>
-		                      <strong>{launchGateRunState === "running" ? "Checking" : `${launchGateScore}%`}</strong>
-		                      <small>{launchGateAllowed ? "Ready" : "Needs fixes"}</small>
-		                    </div>
-		                  </div>
+			              ) : activeRoute === "launch" || (!isOperationalDashboardLive && isOperationalRoute(activeRoute)) ? (
+	                    <>
+					                <section className={`completed-launch-gate ${launchGateCanLaunch ? "is-ready" : "is-locked"} ${launchGateRunState === "running" ? "is-running" : ""}`} aria-label="Launch gate decision">
+				                  <h1 className="sr-only" id="completed-route-title">Launch readiness</h1>
+                          <div className="completed-launch-decision">
+                            <div
+                              className="completed-launch-ring"
+                              aria-label={`Launch readiness ${launchGateScore}%`}
+                              style={{
+                                "--launch-progress": `${launchGateScore * 3.6}deg`,
+                                "--launch-color": launchGateToneColor
+                              } as React.CSSProperties}
+                            >
+                              <div>
+                                <strong>{launchGateRunState === "running" ? "..." : `${launchGateScore}%`}</strong>
+                                <small>{launchGateCanLaunch ? "Ready" : isLaunchDeployed ? "Live" : "Gate"}</small>
+                              </div>
+                            </div>
+                            <div className="completed-launch-decision-copy">
+                              <h2>{launchGateDecisionTitle}</h2>
+                              <small>{launchGateDecisionSummary} {launchGateScore}% / {launchGateThreshold}% required.</small>
+                              <button
+                                className="completed-launch-primary-button"
+                                type="button"
+                                onClick={launchGateCanLaunch ? launchAgent : runLaunchGateTests}
+                                disabled={isLaunchDeployed || launchGateRunState === "running"}
+                              >
+                                {launchGatePrimaryAction}
+                              </button>
+                            </div>
+                          </div>
 
-		                  <div className="completed-launch-choice-grid" aria-label="Launchgate actions">
-		                    <button className="completed-launch-choice is-launch" type="button" disabled={!launchGateAllowed}>
-		                      <span>Launch</span>
-		                      <strong>Launch agent</strong>
-		                      <small>{launchGateAllowed ? "Move this agent into production." : "Available after fixes pass."}</small>
-		                    </button>
-		                    <button className="completed-launch-choice is-fix" type="button" onClick={runLaunchGateTests} disabled={launchGateRunState === "running"}>
-		                      <span>Fix</span>
-		                      <strong>{launchGateRunState === "running" ? "Checking fixes" : "Fix blockers"}</strong>
-		                      <small>{launchGateRunState === "running" ? "Refreshing the launch check." : launchGateFixSummary}</small>
-		                    </button>
-		                  </div>
+                          <div className="completed-launch-checklist" aria-label="Launch requirements">
+                            {launchGateTestResults.map((test) => (
+                              <article
+                                className={[
+                                  test.state === "Pass" ? "is-pass" : "",
+                                  test.state === "Blocked" ? "is-blocked" : "",
+                                  test.state === "Review" || test.state === "Retest" ? "is-review" : ""
+                                ].filter(Boolean).join(" ")}
+                                key={test.label}
+                              >
+                                <span className="completed-launch-check-status">{test.state}</span>
+                                <div>
+                                  <strong>{test.label}</strong>
+                                </div>
+                                <b>{test.value}</b>
+                              </article>
+                            ))}
+                          </div>
+			                </section>
+	                    <section className={`completed-launch-test-runner ${launchGateCanLaunch || isLaunchDeployed ? "is-ready" : ""}`} aria-label="Launch test runner">
+                        <div>
+                          <span>{launchGateRunState === "running" ? "Testing now" : launchGateTestsComplete ? "Latest test" : "Scenario tests"}</span>
+                          <strong>
+                            {isLaunchDeployed
+                              ? "Agent is live"
+                              : launchGateRunState === "running"
+                                ? "Running launch tests"
+                                : launchGateCanLaunch
+                                  ? "Tests passed"
+                                  : "Run the scenario tests"}
+                          </strong>
+                          <small>
+                            {isLaunchDeployed
+                              ? launchGateOperationalCopy.summary
+                              : launchGateRunState === "running"
+                                ? "Replaying customer scenarios and checking production dependencies."
+                                : launchGateTestsComplete
+                                  ? launchDiagnosticFinding
+                                  : "Run the gate check to replay customer scenarios and see what needs fixing."}
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={runLaunchGateTests}
+                          disabled={isLaunchDeployed || launchGateRunState === "running"}
+                        >
+                          {launchGateRunState === "running" ? "Running" : launchGateTestsComplete ? "Run again" : "Run tests"}
+                        </button>
+                      </section>
+	                    </>
+	              ) : activeRoute === "launch-tests" ? (
+                    <section className="launch-tests completed-launch-tests" data-state={launchGateRunState} aria-live="polite" aria-label="Launch test runner">
+                      <header className="launch-tests-head">
+                        <div className="launch-tests-heading">
+                          <span>Launch tests · {launchGateRunState === "running" ? "Running" : launchGateTestsComplete ? "Complete" : "Ready"}</span>
+                          <strong>
+                            {launchGateRunState === "running"
+                              ? "Running launch checks"
+                              : launchGateTestsComplete
+                                ? launchGateCanLaunch
+                                  ? "All checks passed"
+                                  : `${launchGateTestSuitePassedCount} of ${launchGateTestSuite.length} checks passed`
+                                : "Run the in-depth launch check"}
+                          </strong>
+                          <p>
+                            {launchGateRunState === "running"
+                              ? `Checking ${launchTestRunningLabel.toLowerCase()}…`
+                              : launchGateTestsComplete
+                                ? launchDiagnosticFinding
+                                : "Replays customer scenarios and verifies production systems, runtime health, and safety guardrails before you go live."}
+                          </p>
+                        </div>
+                        <button className="launch-tests-run" type="button" onClick={runLaunchGateTests} disabled={isLaunchDeployed || launchGateRunState === "running"}>
+                          {launchGateRunState === "running" ? "Running…" : launchGateTestsComplete ? "Run again" : "Run tests"}
+                        </button>
+                      </header>
 
-		                  <aside className="completed-launch-fix-list" aria-label="Launchgate fix list">
-		                    <span>{launchGateAllowed ? "Ready" : "Fix first"}</span>
-		                    <h2>{launchGateAllowed ? "No required fixes." : "What needs fixing"}</h2>
-		                    <div>
-		                      {launchGateFixItems.map((item) => (
-		                        <article className={launchGateAllowed ? "is-clear" : "is-blocked"} key={item}>
-		                          <strong>{item}</strong>
-		                        </article>
-		                      ))}
-		                    </div>
-		                  </aside>
-		                </section>
+                      <div className="launch-tests-stats">
+                        <article data-tone={launchGateScore >= launchGateThreshold ? "pass" : "idle"}>
+                          <span>Launch score</span>
+                          <strong>{launchGateRunState === "running" ? "…" : `${launchGateScore}%`}</strong>
+                          <small>{launchGateScore >= launchGateThreshold ? "Meets launch threshold" : `${launchGateThreshold}% required to launch`}</small>
+                        </article>
+                        <article>
+                          <span>Checks passed</span>
+                          <strong>
+                            {launchTestRunPassedCount}
+                            <i>/ {launchGateTestSuite.length}</i>
+                          </strong>
+                          <small>{launchGateRunState === "complete" ? "Run complete" : launchGateRunState === "running" ? "Evaluating…" : "Not started"}</small>
+                        </article>
+                        <article data-tone={launchGateRunState === "complete" ? (launchGateCanLaunch ? "pass" : "warn") : "idle"}>
+                          <span>Status</span>
+                          <strong>{launchGateRunState === "complete" ? (launchGateCanLaunch ? "Passed" : "Action needed") : launchGateRunState === "running" ? "Testing" : "Queued"}</strong>
+                          <small>{launchGateRunState === "running" ? `${launchTestProgress}% complete` : `${launchGateTestSuite.length} launch checks`}</small>
+                        </article>
+                      </div>
+
+                      <div
+                        className="launch-tests-bar"
+                        role="progressbar"
+                        aria-valuenow={launchTestProgress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label="Launch test progress"
+                      >
+                        <i style={{ width: `${launchTestProgress}%` }} />
+                      </div>
+
+                      <div className="launch-tests-body">
+                        <ol className="launch-tests-list" aria-label="Launch checks">
+                          {launchGateTestSuite.map((test, index) => {
+                            const isCurrent = launchGateRunState === "running" && launchTestActiveIndex === index && launchTestCompletedCount <= index;
+                            const isDone = launchTestCompletedCount > index;
+                            const passed = test.state === "Pass";
+                            const status = isDone ? (passed ? "pass" : "warn") : isCurrent ? "running" : "queued";
+                            const statusLabel = isDone ? (passed ? "Passed" : test.state) : isCurrent ? "Running" : "Queued";
+
+                            return (
+                              <li key={test.label}>
+                                <button
+                                  className={launchTestSelectedIndex === index ? "is-active" : ""}
+                                  data-status={status}
+                                  type="button"
+                                  aria-pressed={launchTestSelectedIndex === index}
+                                  onClick={() => setLaunchTestSelectedIndex(index)}
+                                >
+                                  <span className="launch-tests-index">{index + 1}</span>
+                                  <span className="launch-tests-meta">
+                                    <strong>{test.label}</strong>
+                                    <small>{test.detail}</small>
+                                  </span>
+                                  <span className="launch-tests-status" data-status={status}>
+                                    {isCurrent ? <i className="launch-tests-spinner" aria-hidden="true" /> : null}
+                                    {statusLabel}
+                                  </span>
+                                  <b className="launch-tests-score">{isDone || launchGateRunState === "complete" ? test.value : "—"}</b>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ol>
+
+                        <aside
+                          className="launch-tests-detail"
+                          data-status={launchTestCompletedCount > launchTestSelectedIndex ? (selectedLaunchTest.state === "Pass" ? "pass" : "warn") : "idle"}
+                          aria-label="Check detail"
+                        >
+                          <header>
+                            <span>{selectedLaunchTest.required}</span>
+                            <strong>{selectedLaunchTest.label}</strong>
+                          </header>
+                          <div className="launch-tests-detail-score">
+                            <b>{selectedLaunchTest.value}</b>
+                            <span>{selectedLaunchTest.state === "Pass" ? "Check passed" : selectedLaunchTest.action}</span>
+                          </div>
+                          <p>{selectedLaunchTest.detail}</p>
+                          <ul className="launch-tests-checks">
+                            {[...selectedLaunchTest.checks]
+                              .sort((a, b) => Number(a.passed) - Number(b.passed))
+                              .map((check) => (
+                                <li key={check.name} data-pass={check.passed ? "true" : "false"}>
+                                  <i aria-hidden="true">{check.passed ? "✓" : "!"}</i>
+                                  <span className="launch-tests-check-name">{check.name}</span>
+                                  <b className="launch-tests-check-value">{check.value}</b>
+                                </li>
+                              ))}
+                          </ul>
+                        </aside>
+                      </div>
+
+                      {launchFixState === "fixing" || launchFixSteps.length ? (
+                        <div className="launch-tests-fixlog" data-state={launchFixState} aria-live="polite">
+                          <strong>
+                            {launchFixState === "fixing"
+                              ? "Fixing the failing checks…"
+                              : firstFailingLaunchTest
+                                ? "Applied fixes — re-running the gate"
+                                : "All checks fixed. Ready to launch."}
+                          </strong>
+                          <ul>
+                            {launchFixSteps.map((fixStep) => (
+                              <li key={fixStep.label} data-status={fixStep.status}>
+                                <i aria-hidden="true">
+                                  {fixStep.status === "done" ? "✓" : fixStep.status === "fixing" ? "" : "•"}
+                                </i>
+                                <span>{fixStep.label}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {firstFailingLaunchTest ? (
+                        <footer className="launch-tests-footer">
+                          <button
+                            className="launch-tests-fix"
+                            type="button"
+                            onClick={diagnoseAndFixLaunch}
+                            disabled={launchFixState === "fixing"}
+                          >
+                            {launchFixState === "fixing" ? "Fixing…" : "Diagnose & fix"}
+                            {launchFixState === "fixing" ? null : <span aria-hidden="true">→</span>}
+                          </button>
+                        </footer>
+                      ) : null}
+                    </section>
+	              ) : activeRoute === "risk" && isOperationalDashboardLive ? (
+                <section className="live-ops-dashboard" aria-label="Live operations queue">
+                  {openedLiveQueueItem ? (
+                    <section className={`live-ops-open-page is-${openedLiveQueueItem.channel}`} aria-label={`${openedLiveQueueItem.channel} detail`}>
+                      {openedLiveQueueItem.channel === "phone" ? (
+                        <button className="live-ops-back-button" type="button" onClick={() => setOpenedLiveQueueId(null)}>
+                          Back to Live Queue
+                        </button>
+                      ) : null}
+                      {openedLiveQueueItem.channel === "phone" ? (
+                        <>
+                          <header className="live-ops-session-header">
+                            <div className="live-ops-detail-person">
+                              <b className={`is-tone-${initialsForName(openedLiveQueueItem.customer).charCodeAt(0) % 5}`}>
+                                {avatarForName(openedLiveQueueItem.customer) ? <img src={avatarForName(openedLiveQueueItem.customer)} alt="" /> : initialsForName(openedLiveQueueItem.customer)}
+                              </b>
+                              <div>
+                                <span>Live phone call</span>
+                                <h2>{openedLiveQueueItem.customer}</h2>
+                                <p>{openedLiveQueueItem.title} / {operationStatusLabel(openedLiveQueueItem.status)} / {priorityLabel(openedLiveQueueItem.riskLevel)}</p>
+                              </div>
+                            </div>
+                            <div className="live-ops-session-actions" aria-label="Session actions">
+                              <button type="button">Assign owner</button>
+                              <button type="button">Create ticket</button>
+                              <button type="button">Join</button>
+                            </div>
+                          </header>
+                          <div className="live-ops-phone-workspace">
+                            <section className="live-ops-call-stage" aria-label="Active phone call">
+                              <div className="live-ops-call-status">
+                                <span><i></i>Connected</span>
+                                <strong>{openedLiveQueueDuration}</strong>
+                              </div>
+                              <div className="live-ops-waveform" aria-hidden="true">
+                                {Array.from({ length: 34 }).map((_, index) => (
+                                  <i key={`wave-${index}`} style={{ "--wave": `${18 + ((index * 17) % 56)}%` } as React.CSSProperties}></i>
+                                ))}
+                              </div>
+                              <div className="live-ops-call-controls" aria-label="Call controls">
+                                <button type="button">Mute</button>
+                                <button type="button">Hold</button>
+                                <button type="button">Transfer</button>
+                                <button type="button">End</button>
+                              </div>
+                            </section>
+                            <aside className="live-ops-call-context" aria-label="Call context">
+                              <article>
+                                <span>AI confidence</span>
+                                <strong>{openedLiveQueueItem.confidence}%</strong>
+                                <p>{operationStatusLabel(openedLiveQueueItem.status)}. {openedLiveQueueItem.action}</p>
+                              </article>
+                              <article>
+                                <span>Customer need</span>
+                                <p>{openedLiveQueueItem.detail}</p>
+                              </article>
+                              <article className="live-ops-call-transcript-feed">
+                                <span>Live transcript</span>
+                                <div>
+                                  {openedLiveQueueTranscript.map((turn, turnIndex) => {
+                                    const tone = turn.speaker === "Customer" ? "customer" : turn.speaker === "System" ? "system" : "ai";
+                                    const speakerName = turn.speaker === "Customer"
+                                      ? openedLiveQueueItem.customer
+                                      : turn.speaker === "System" ? "System" : "RelayClarity";
+
+                                    return (
+                                      <p className={`is-${tone}`} key={`live-call-turn-${turnIndex}`}>
+                                        <span>{speakerName}</span>
+                                        {turn.text}
+                                      </p>
+                                    );
+                                  })}
+                                </div>
+                              </article>
+                            </aside>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="live-ops-chat-workspace">
+                          <section className="live-ops-chat-thread" aria-label="Live chat transcript">
+                            <header className="live-ops-chat-window-header">
+                              <button
+                                className="live-ops-chat-back-arrow"
+                                type="button"
+                                aria-label="Back to live queue"
+                                title="Back to live queue"
+                                onClick={() => setOpenedLiveQueueId(null)}
+                              >
+                                ←
+                              </button>
+                              <div>
+                                <span><i></i>Customer online</span>
+                                <strong>{openedLiveQueueItem.title}</strong>
+                                <small>{openedLiveQueueItem.customer} <b>•</b> {openedLiveQueueDuration}</small>
+                              </div>
+                              <div className="live-ops-chat-window-tools">
+                                <em><i></i>{priorityLabel(openedLiveQueueItem.riskLevel)}</em>
+                                {openedLiveQueueIsJoined ? (
+                                  <span className="live-ops-join-status"><i></i>You're in this chat</span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className={`live-ops-join-button${openedLiveQueueIsJoined ? " is-joined" : ""}`}
+                                  onClick={() => (openedLiveQueueIsJoined ? handleLeaveLiveChat(openedLiveQueueItem.id) : handleJoinLiveChat(openedLiveQueueItem.id))}
+                                >
+                                  {openedLiveQueueIsJoined ? "Leave chat" : "Join chat"}
+                                </button>
+                              </div>
+                            </header>
+                            <div className="live-ops-chat-scroll">
+                              {openedLiveQueueThread.map((turn) => {
+                                const tone = turn.role === "Customer"
+                                  ? "customer"
+                                  : turn.role === "System"
+                                    ? "system"
+                                    : turn.role === "Admin" ? "admin" : "ai";
+
+                                if (tone === "system") {
+                                  return (
+                                    <div className="live-ops-chat-message is-system" key={`live-chat-${turn.key}`}>
+                                      <p>{turn.text}</p>
+                                    </div>
+                                  );
+                                }
+
+                                const avatarSource = turn.role === "Customer" ? avatarForName(openedLiveQueueItem.customer) : "";
+                                const avatarLabel = turn.role === "Customer"
+                                  ? initialsForName(openedLiveQueueItem.customer)
+                                  : turn.role === "Admin" ? "ME" : "AI";
+
+                                return (
+                                  <div className={`live-ops-chat-message is-${tone}`} key={`live-chat-${turn.key}`}>
+                                    <b className="live-ops-chat-avatar">
+                                      {avatarSource ? <img src={avatarSource} alt="" /> : avatarLabel}
+                                    </b>
+                                    <div className="live-ops-chat-bubble">
+                                      <strong>{turn.name}</strong>
+                                      <p>{turn.text}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <form
+                              className="live-ops-chat-composer"
+                              aria-label="Reply composer"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                handleSendLiveChatReply(openedLiveQueueItem.id);
+                              }}
+                            >
+                              {openedLiveQueueIsJoined ? null : (
+                                <p className="live-ops-composer-hint">Join the chat to reply — your first message connects you to the customer.</p>
+                              )}
+                              <label>
+                                <span>Your reply</span>
+                                <textarea
+                                  placeholder={openedLiveQueueIsJoined ? "Type your reply to the customer" : "Join the chat to start replying"}
+                                  value={liveChatComposerText}
+                                  onChange={(event) => setLiveChatComposerText(event.target.value)}
+                                />
+                              </label>
+                              <div>
+                                <button type="submit" disabled={!liveChatComposerText.trim()}>
+                                  {openedLiveQueueIsJoined ? "Send reply ›" : "Join & send ›"}
+                                </button>
+                              </div>
+                            </form>
+                          </section>
+                          <aside className="live-ops-chat-context" aria-label="Chat context">
+                            <section className="live-ops-context-panel" aria-label="Customer details and next steps">
+                              <header>
+                                <b className={`is-tone-${initialsForName(openedLiveQueueItem.customer).charCodeAt(0) % 5}`}>
+                                  {avatarForName(openedLiveQueueItem.customer) ? <img src={avatarForName(openedLiveQueueItem.customer)} alt="" /> : initialsForName(openedLiveQueueItem.customer)}
+                                </b>
+                                <div>
+                                  <strong>{openedLiveQueueItem.customer}</strong>
+                                  <small>Known customer</small>
+                                  <small>Last active 4 min ago</small>
+                                </div>
+                              </header>
+                              <article className="live-ops-context-summary">
+                                <span>Conversation</span>
+                                <dl>
+                                  <div><dt>Intent</dt><dd>{openedLiveQueueItem.title}</dd></div>
+                                  <div><dt>Status</dt><dd>{operationStatusLabel(openedLiveQueueItem.status)}</dd></div>
+                                  <div><dt>Priority</dt><dd>{priorityLabel(openedLiveQueueItem.riskLevel)}</dd></div>
+                                  <div><dt>AI confidence</dt><dd>{openedLiveQueueItem.confidence}%</dd></div>
+                                  <div><dt>Duration</dt><dd>{openedLiveQueueDuration}</dd></div>
+                                </dl>
+                              </article>
+                              <article className="live-ops-staff-options">
+                                <span>Staff options</span>
+                                <button type="button">Assign to staff</button>
+                                <button type="button">Escalate to supervisor</button>
+                                <button type="button">Transfer chat</button>
+                                <button type="button">Add internal note</button>
+                                <button type="button">Mark urgent</button>
+                              </article>
+                              <article className="live-ops-account-info">
+                                <span>Customer</span>
+                                <dl>
+                                  <div><dt>Email</dt><dd>{openedLiveQueueItem.customer.toLowerCase().replace(/\s+/g, ".")}@example.com</dd></div>
+                                  <div><dt>Phone</dt><dd>+44 7700 900111</dd></div>
+                                  <div><dt>Account tier</dt><dd>Pro</dd></div>
+                                  <div><dt>Customer since</dt><dd>Mar 2023</dd></div>
+                                  <div><dt>Open tickets</dt><dd>2</dd></div>
+                                </dl>
+                              </article>
+                              <article className="live-ops-context-actions">
+                                <span>Quick actions</span>
+                                <button type="button">View full profile</button>
+                                <button type="button">Open order history</button>
+                                <button type="button">Send help article</button>
+                              </article>
+                            </section>
+                          </aside>
+                        </div>
+                      )}
+                    </section>
+                  ) : (
+                    <div className="live-ops-board">
+                      <section className="live-ops-panel live-ops-active" aria-label="Active conversations">
+                        <header>
+                          <div>
+                            <h3>Active Conversations <span>{allActiveConversationRows.length}</span></h3>
+                          </div>
+                          <div className="live-ops-panel-actions">
+                            <button type="button">Sort: Newest</button>
+                            <button type="button" aria-label="Queue controls">≡</button>
+                          </div>
+                        </header>
+                        <div className="live-ops-table is-conversations">
+                          <div className="live-ops-table-head">
+                            <span>Customer</span>
+                            <span>Status</span>
+                            <span>Intent</span>
+                            <span>Duration</span>
+                            <span>Priority</span>
+                            <span></span>
+                          </div>
+                          {activeConversationRows.map((item, index) => (
+                            <button
+                              className={`live-ops-row is-${item.riskLevel}`}
+                              type="button"
+                              onClick={() => setOpenedLiveQueueId(item.id)}
+                              key={`active-${item.id}`}
+                            >
+                              <span className="live-ops-customer">
+                                <b className={`is-tone-${initialsForName(item.customer).charCodeAt(0) % 5}`}>
+                                  {avatarForName(item.customer) ? <img src={avatarForName(item.customer)} alt="" /> : initialsForName(item.customer)}
+                                </b>
+                                <span><strong>{item.customer}</strong><small>{item.detail}</small></span>
+                              </span>
+                              <span><em>{operationStatusLabel(item.status)}</em></span>
+                              <span>{item.title}</span>
+                              <span>{durationForConversation(item, index)}</span>
+                              <span className="live-ops-priority"><i></i>{priorityLabel(item.riskLevel)}</span>
+                              <span className="live-ops-arrow">›</span>
+                            </button>
+                          ))}
+                          {allActiveConversationRows.length > 6 ? (
+                            <button
+                              type="button"
+                              className="live-ops-view-all"
+                              onClick={() => setShowAllConversations((previous) => !previous)}
+                            >
+                              {showAllConversations ? "Show fewer conversations" : `View all conversations (${allActiveConversationRows.length}) →`}
+                            </button>
+                          ) : null}
+                        </div>
+                      </section>
+
+                      <aside className="live-ops-panel live-ops-handoff" aria-label="Agent needed">
+                        <header>
+                          <h3>Agent Needed <span>{allHandoffQueueRows.length}</span></h3>
+                          {allHandoffQueueRows.length > 5 ? (
+                            <button type="button" onClick={() => setShowAllHandoffs((previous) => !previous)}>
+                              {showAllHandoffs ? "Show fewer" : "View all"}
+                            </button>
+                          ) : null}
+                        </header>
+                        <div className="live-ops-handoff-list">
+                          {handoffQueueRows.map((item) => (
+                            <article className={`is-${item.riskLevel}`} key={`handoff-${item.id}`}>
+                              <b className={`is-tone-${initialsForName(item.customer).charCodeAt(0) % 5}`}>
+                                {avatarForName(item.customer) ? <img src={avatarForName(item.customer)} alt="" /> : initialsForName(item.customer)}
+                              </b>
+                              <div>
+                                <strong>{item.customer}</strong>
+                                <p>{item.detail}</p>
+                                <small>{item.title} · {item.channel === "phone" ? "04:21" : "07:33"}</small>
+                              </div>
+                              <span><i></i>{priorityLabel(item.riskLevel)}</span>
+                              <button type="button">Assign</button>
+                            </article>
+                          ))}
+                        </div>
+                      </aside>
+
+                      <section className="live-ops-panel live-ops-calls" id="calls" aria-label="Live calls">
+                        <header>
+                          <h3>Live Calls <span>{allLiveCallRows.length}</span></h3>
+                          {allLiveCallRows.length > 4 ? (
+                            <button type="button" onClick={() => setShowAllCalls((previous) => !previous)}>
+                              {showAllCalls ? "Show fewer calls" : "View all calls →"}
+                            </button>
+                          ) : null}
+                        </header>
+                        <div className="live-ops-table is-calls">
+                          <div className="live-ops-table-head">
+                            <span>Customer</span>
+                            <span>Phone</span>
+                            <span>Status</span>
+                            <span>Intent</span>
+                            <span>Duration</span>
+                            <span>Queue</span>
+                          </div>
+                          {liveCallRows.map((call, index) => {
+                            const callConversation = liveCallConversationRows[index];
+
+                            return (
+                              <button
+                                className={`live-ops-call-row is-${call.outcome.toLowerCase()}`}
+                                type="button"
+                                onClick={() => setOpenedLiveQueueId(callConversation.id)}
+                                key={`call-${call.id}`}
+                              >
+                                <span className="live-ops-customer">
+                                  <b className={`is-tone-${initialsForName(call.callerName).charCodeAt(0) % 5}`}>
+                                    {avatarForName(call.callerName) ? <img src={avatarForName(call.callerName)} alt="" /> : initialsForName(call.callerName)}
+                                  </b>
+                                  <span><strong>{call.callerName}</strong></span>
+                                </span>
+                                <span>{call.phone}</span>
+                                <span><em>{call.outcome === "Handoff" ? "Needs agent" : call.outcome === "Review" ? "Review" : "AI active"}</em></span>
+                                <span>{call.intent}</span>
+                                <span>{call.duration}</span>
+                                <span className="live-ops-queue-dot"><i></i>{call.issueCategory} line</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                </section>
+	              ) : activeRoute === "settings" ? (
+                <section className="completed-settings" aria-label="Workspace settings">
+                  <header className="completed-settings-header">
+                    <span>Settings</span>
+                    <h1>{activeProject.name}</h1>
+                    <p>Manage how this workspace and account run.</p>
+                  </header>
+                  <div className="completed-settings-body">
+                    <nav className="completed-settings-tabs" aria-label="Settings sections">
+                      {settingsSections.map((section) => (
+                        <button
+                          key={section.id}
+                          type="button"
+                          className={section.id === settingsTab ? "is-active" : ""}
+                          aria-current={section.id === settingsTab ? "page" : undefined}
+                          onClick={() => setSettingsTab(section.id)}
+                        >
+                          <strong>{section.label}</strong>
+                          <small>{section.hint}</small>
+                        </button>
+                      ))}
+                    </nav>
+                    <div className="completed-settings-content">
+                      <div className="completed-settings-content-head">
+                        <h2>{activeSettingsSection.title}</h2>
+                        <p>{activeSettingsSection.summary}</p>
+                      </div>
+                      <div className="completed-settings-rows">
+                        {activeSettingsSection.rows.map((row) => {
+                          const inner = (
+                            <>
+                              <div>
+                                <strong>{row.label}</strong>
+                                {row.note ? <p>{row.note}</p> : null}
+                              </div>
+                              {row.value ? <span>{row.value}</span> : null}
+                            </>
+                          );
+                          if (row.href) {
+                            return (
+                              <a className="is-link" href={row.href} key={row.label}>
+                                {inner}
+                              </a>
+                            );
+                          }
+                          if (row.goto) {
+                            return (
+                              <button className="is-link" type="button" key={row.label} onClick={() => openSettingsRoute(row.goto!)}>
+                                {inner}
+                              </button>
+                            );
+                          }
+                          return <article key={row.label}>{inner}</article>;
+                        })}
+                      </div>
+                      {activeSettingsSection.id === "workspace" ? (
+                        <div className="completed-settings-switcher">
+                          <span>Switch workspace</span>
+                          <div className="completed-settings-switcher-list">
+                            {projects.map((project) => (
+                              <button
+                                key={project.id}
+                                type="button"
+                                className={project.id === activeProjectId ? "is-active" : ""}
+                                onClick={() => onSelectProject(project.id)}
+                              >
+                                <strong>{project.name}</strong>
+                                <small>{project.businessType || project.meta}</small>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="completed-settings-actions">
+                            <button type="button" onClick={onCreateProject}>New workspace</button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {activeSettingsSection.id === "account" ? (
+                        <div className="completed-settings-actions">
+                          <button type="button" onClick={onSignOut}>Sign out</button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+	              ) : activeRoute === "help" ? (
+                <section className="completed-settings" aria-label="Help and support">
+                  <header className="completed-settings-header">
+                    <span>Help</span>
+                    <h1>Help &amp; support</h1>
+                    <p>Guides, answers, and ways to reach the team.</p>
+                  </header>
+                  <div className="completed-settings-body">
+                    <nav className="completed-settings-tabs" aria-label="Help sections">
+                      {helpSections.map((section) => (
+                        <button
+                          key={section.id}
+                          type="button"
+                          className={section.id === helpTab ? "is-active" : ""}
+                          aria-current={section.id === helpTab ? "page" : undefined}
+                          onClick={() => setHelpTab(section.id)}
+                        >
+                          <strong>{section.label}</strong>
+                          <small>{section.hint}</small>
+                        </button>
+                      ))}
+                    </nav>
+                    <div className="completed-settings-content">
+                      <div className="completed-settings-content-head">
+                        <h2>{activeHelpSection.title}</h2>
+                        <p>{activeHelpSection.summary}</p>
+                      </div>
+                      <div className="completed-settings-rows">
+                        {activeHelpSection.rows.map((row) => {
+                          const inner = (
+                            <>
+                              <div>
+                                <strong>{row.label}</strong>
+                                {row.note ? <p>{row.note}</p> : null}
+                              </div>
+                              {row.value ? <span>{row.value}</span> : null}
+                            </>
+                          );
+                          if (row.href) {
+                            return (
+                              <a className="is-link" href={row.href} key={row.label}>
+                                {inner}
+                              </a>
+                            );
+                          }
+                          if (row.goto) {
+                            return (
+                              <button className="is-link" type="button" key={row.label} onClick={() => openSettingsRoute(row.goto!)}>
+                                {inner}
+                              </button>
+                            );
+                          }
+                          return <article key={row.label}>{inner}</article>;
+                        })}
+                      </div>
+                      {activeHelpSection.id === "contact" ? (
+                        <div className="completed-settings-actions">
+                          <a href="mailto:support@relayclarity.ai">Email support</a>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
 	              ) : (
                 <>
                   <div className="completed-route-metrics" aria-label={`${activeRouteData.title} metrics`}>
@@ -6098,7 +11367,7 @@ function CompletedOnboardingDashboard({
 		                          </p>
 			                          {selectedCompletedIntegration.status !== "Connected" ? (
 			                            <div className="completed-integration-action-row">
-			                              <button type="button">Connect</button>
+			                              <button type="button" onClick={() => void connectCompletedIntegration().catch(console.error)}>Connect</button>
 			                            </div>
 			                          ) : null}
 				                        </div>
@@ -6227,18 +11496,71 @@ function CompletedOnboardingDashboard({
                     transition={{ duration: 0.95, ease: [0.16, 1, 0.3, 1] }}
                   >
                     <div className="completed-chat-window">
-                      {assistantMessages.map((message, index) => (
+                      {openingAssistantTurn ? (
                         <motion.div
-                          className={`completed-message ${message.role === "agent" ? "is-assistant" : "is-user"}`}
-                          key={`${message.role}-${index}`}
+                          className={`completed-message ${openingAssistantTurn.role === "agent" ? "is-assistant" : "is-user"}`}
+                          key="opening-assistant-message"
                           initial={{ opacity: 0, y: 14, scale: 0.992, filter: "blur(6px)" }}
                           animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                           transition={{ duration: 0.62, ease: [0.16, 1, 0.3, 1] }}
                         >
-                          <span>{message.role === "agent" ? "RC" : workspaceInitial}</span>
-                          <p>{message.content}{message.role === "agent" && isAssistantTyping && index === assistantMessages.length - 1 ? <b className="completed-type-caret" aria-hidden="true"></b> : null}</p>
+                          <span>{openingAssistantTurn.role === "agent" ? "RC" : workspaceInitial}</span>
+                          <div className="completed-message-body">
+                            {renderChatMessageContent(
+                              openingAssistantTurn.content,
+                              openingAssistantTurn.role === "agent" && isAssistantTyping && assistantMessages.length === 1 ? <b className="completed-type-caret" aria-hidden="true"></b> : null
+                            )}
+                            {showAgentInsights ? (
+                              <motion.section
+                                className="completed-agent-insights"
+                                aria-label="AI customer agent test data"
+                                initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
+                                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                                transition={{ duration: 0.72, ease: [0.16, 1, 0.3, 1] }}
+                              >
+                                <div className="completed-insight-metrics">
+                                  {agentInsightMetrics.map((metric) => (
+                                    <article key={metric.label}>
+                                      <span>{metric.label}</span>
+                                      <strong>{metric.value}</strong>
+                                      <small>{metric.detail}</small>
+                                    </article>
+                                  ))}
+                                </div>
+
+                                <WorkspaceChatCharts
+                                  charts={currentAssistantCharts.filter((chart) => ["hourly-volume", "handoff-reasons"].includes(chart.id))}
+                                  onPointClick={openMetricPoint}
+                                />
+                              </motion.section>
+                            ) : null}
+                          </div>
                         </motion.div>
-                      ))}
+                      ) : null}
+                      {followUpAssistantMessages.map((message, index) => {
+                        const messageIndex = index + 1;
+
+                        return (
+                          <motion.div
+                            className={`completed-message ${message.role === "agent" ? "is-assistant" : "is-user"}`}
+                            key={`${message.role}-${messageIndex}`}
+                            initial={{ opacity: 0, y: 14, scale: 0.992, filter: "blur(6px)" }}
+                            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                            transition={{ duration: 0.62, ease: [0.16, 1, 0.3, 1] }}
+                          >
+                            <span>{message.role === "agent" ? "RC" : workspaceInitial}</span>
+                            <div className="completed-message-body">
+                              {renderChatMessageContent(
+                                message.content,
+                                message.role === "agent" && isAssistantTyping && messageIndex === assistantMessages.length - 1 ? <b className="completed-type-caret" aria-hidden="true"></b> : null
+                              )}
+                              {message.role === "agent" && message.content.length > 8 && message.charts?.length ? (
+                                <WorkspaceChatCharts charts={message.charts} onPointClick={openMetricPoint} />
+                              ) : null}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                       {workspaceAssistantStatus === "loading" || (isAssistantTyping && assistantMessages.length === 0) ? (
                         <motion.div
                           className="completed-message is-assistant is-thinking"
@@ -6248,7 +11570,7 @@ function CompletedOnboardingDashboard({
                           transition={{ duration: 0.35 }}
                         >
                           <span>RC</span>
-                          <p><i></i><i></i><i></i></p>
+                          <p><strong>Thinking</strong></p>
                         </motion.div>
                       ) : null}
                       {workspaceAssistantError ? (
@@ -6256,60 +11578,7 @@ function CompletedOnboardingDashboard({
                           {workspaceAssistantError}
                         </div>
                       ) : null}
-                      {showAgentInsights ? (
-                        <motion.section
-                          className="completed-agent-insights"
-                          aria-label="AI customer agent test data"
-                          initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
-                          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                          transition={{ duration: 0.72, ease: [0.16, 1, 0.3, 1] }}
-                        >
-                          <div className="completed-insight-metrics">
-                            {agentInsightMetrics.map((metric) => (
-                              <article key={metric.label}>
-                                <span>{metric.label}</span>
-                                <strong>{metric.value}</strong>
-                                <small>{metric.detail}</small>
-                              </article>
-                            ))}
-                          </div>
-
-                          <div className="completed-insight-visuals">
-                            <section aria-label="Hourly customer call volume">
-                              <div className="completed-insight-heading">
-                                <span>Hourly call volume</span>
-                                <strong>{liveMetrics.callsHandled} calls today</strong>
-                              </div>
-                              <div className="completed-volume-chart">
-                                {agentHourlyVolume.map((hour) => (
-                                  <div key={hour.label}>
-                                    <i style={{ height: `${Math.max(18, hour.value * 8)}px` }}></i>
-                                    <span>{hour.label}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </section>
-
-                            <section aria-label="Human handoff reasons">
-                              <div className="completed-insight-heading">
-                                <span>Handoff reasons</span>
-                                <strong>{liveMetrics.handoffs} reviews</strong>
-                              </div>
-                              <div className="completed-handoff-chart">
-                                {handoffReasons.map((reason) => (
-                                  <article key={reason.label}>
-                                    <div>
-                                      <span>{reason.label}</span>
-                                      <strong>{reason.value}</strong>
-                                    </div>
-                                    <i><b style={{ width: `${reason.percent}%` }}></b></i>
-                                  </article>
-                                ))}
-                              </div>
-                            </section>
-                          </div>
-                        </motion.section>
-                      ) : null}
+                      <div className="completed-chat-scroll-anchor" ref={assistantScrollAnchorRef} aria-hidden="true"></div>
                     </div>
                   </motion.section>
                 ) : null}
@@ -6327,7 +11596,13 @@ function CompletedOnboardingDashboard({
         >
           <input
             aria-label="Ask workspace assistant"
-            placeholder={workspaceAssistantStatus === "loading" ? "RelayClarity is reading the workspace data" : "Ask RelayClarity anything about setup, metrics, calls, or next actions"}
+            placeholder={
+              workspaceAssistantStatus === "loading"
+                ? "RelayClarity is reading the workspace data"
+                : isOperationalDashboardLive
+                  ? "Ask RelayClarity anything about setup, metrics, calls, or next actions"
+                  : "Ask RelayClarity about setup, integrations, launch checks, or blockers"
+            }
             value={assistantInput}
             onChange={(event) => setAssistantInput(event.target.value)}
           />
@@ -6362,10 +11637,12 @@ function CompletedOnboardingDashboard({
 	                  <h2 id="completed-integration-modal-title">
 	                    {loginIntegration
 	                      ? loginIntegrationStage === "credentials"
-	                        ? `Log in to ${loginIntegration.company}`
+	                        ? `Connect ${loginIntegration.company}`
 	                        : loginIntegrationStage === "success"
 	                          ? `${loginIntegration.company} connected`
-	                          : `Logging in to ${loginIntegration.company}`
+	                        : loginIntegrationStage === "blocked"
+	                          ? `${loginIntegration.company} needs setup`
+	                          : `Checking ${loginIntegration.company}`
 	                      : "Add integration"}
 	                  </h2>
 	                </div>
@@ -6397,7 +11674,7 @@ function CompletedOnboardingDashboard({
 	                    {loginIntegrationStage === "credentials" ? (
 	                      <form className="completed-integration-login-form" onSubmit={submitIntegrationLogin}>
 	                        <label>
-	                          Email
+	                          Work email
 	                          <input
 	                            type="email"
 	                            value={loginIntegrationEmail}
@@ -6407,16 +11684,16 @@ function CompletedOnboardingDashboard({
 	                          />
 	                        </label>
 	                        <label>
-	                          Password
+	                          Required access notes
 	                          <input
-	                            type="password"
+	                            type="text"
 	                            value={loginIntegrationPassword}
 	                            onChange={(event) => setLoginIntegrationPassword(event.target.value)}
-	                            placeholder="Enter password"
+	                            placeholder="OAuth app, API key owner, webhook owner"
 	                          />
 	                        </label>
-	                        <button type="submit" disabled={!loginIntegrationEmail.trim() || !loginIntegrationPassword.trim()}>
-	                          Continue
+	                        <button type="submit" disabled={!loginIntegrationEmail.trim()}>
+	                          Connect integration
 	                        </button>
 	                        <button type="button" onClick={() => setLoginIntegration(null)}>
 	                          Choose another integration
@@ -6429,12 +11706,16 @@ function CompletedOnboardingDashboard({
 	                          <strong>
 	                            {loginIntegrationStage === "success"
 	                              ? `${loginIntegration.company} is connected`
-	                              : `Logging in to ${loginIntegration.company}`}
+	                              : loginIntegrationStage === "blocked"
+	                              ? `${loginIntegration.company} is not connected yet`
+	                              : `Checking ${loginIntegration.company}`}
 	                          </strong>
 	                          <small>
 	                            {loginIntegrationStage === "success"
 	                              ? "Connection complete. Updating your workspace."
-	                              : "Opening secure authorization for this workspace."}
+	                              : loginIntegrationStage === "blocked"
+	                              ? "A real OAuth, API key, or webhook connector is required before this system can be used by the agent."
+	                              : "Checking whether a real provider connector is available."}
 	                          </small>
 	                        </div>
 	                        <div className={`completed-integration-login-progress ${loginIntegrationStage === "success" ? "is-complete" : ""}`} aria-hidden="true">
@@ -6501,6 +11782,9 @@ function scoreLabel(score: number): string {
 
 function ProviderLogo({ connector, large = false }: { connector: Connector; large?: boolean }) {
   const [logoFailed, setLogoFailed] = useState(false);
+  const logoMark = providerLogoMark(connector.provider);
+  const hasInlineLogo = Boolean(logoMark);
+  const showImageLogo = !hasInlineLogo && connector.logoUrl && !logoFailed;
 
   useEffect(() => {
     setLogoFailed(false);
@@ -6508,16 +11792,43 @@ function ProviderLogo({ connector, large = false }: { connector: Connector; larg
 
   return (
     <span className={`connector-logo ${large ? "large" : ""}`} aria-hidden="true">
-      {connector.logoUrl && !logoFailed ? (
+      {logoMark === "sevenrooms" ? (
+        <svg className="connector-logo-brand sevenrooms" viewBox="0 0 36 36" role="img" focusable="false">
+          <rect x="3" y="3" width="30" height="30" rx="8" />
+          <path d="M12 10h13l-8.2 16h-4.2l6.5-12.2H12V10Z" />
+          <circle cx="25.5" cy="25.5" r="2.4" />
+        </svg>
+      ) : logoMark === "zoom" ? (
+        <svg className="connector-logo-brand zoom-mark" viewBox="0 0 36 36" role="img" focusable="false">
+          <rect x="3" y="6" width="30" height="24" rx="8" />
+          <path d="M11 14.2c0-1.2 0.9-2.2 2.2-2.2h8.4c1.2 0 2.2 1 2.2 2.2v7.6c0 1.2-1 2.2-2.2 2.2h-8.4c-1.3 0-2.2-1-2.2-2.2v-7.6Z" />
+          <path d="M23.8 16.2 29 13v10l-5.2-3.2v-3.6Z" />
+        </svg>
+      ) : logoMark === "front" ? (
+        <svg className="connector-logo-brand front" viewBox="0 0 36 36" role="img" focusable="false">
+          <rect x="3" y="3" width="30" height="30" rx="8" />
+          <path d="M12 10h14v4H16v4h8v4h-8v6h-4V10Z" />
+        </svg>
+      ) : showImageLogo ? (
         <img
           src={connector.logoUrl}
           alt=""
           onError={() => setLogoFailed(true)}
         />
       ) : null}
-      <b>{connector.provider.slice(0, 1)}</b>
+      {!hasInlineLogo && !showImageLogo ? <b>{connector.provider.slice(0, 1)}</b> : null}
     </span>
   );
+}
+
+function providerLogoMark(provider: string) {
+  const normalized = normalizeProviderName(provider);
+
+  if (normalized.includes("sevenrooms")) return "sevenrooms";
+  if (normalized.includes("zoom")) return "zoom";
+  if (normalized.includes("front")) return "front";
+
+  return "";
 }
 
 function DashboardHeader({ eyebrow, title, badge }: { eyebrow: string; title: string; badge?: string }) {

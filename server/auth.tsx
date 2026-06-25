@@ -145,6 +145,7 @@ export function handleCurrentUser(req: Request, res: Response) {
 export function handleEmailLogin(req: Request, res: Response) {
   const email = normalizeEmail(req.body?.email);
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const mode = req.body?.mode === 'signup' ? 'signup' : 'login';
 
   if (!email) {
     res.status(400).json({ error: 'Enter a valid email address.' });
@@ -153,6 +154,18 @@ export function handleEmailLogin(req: Request, res: Response) {
 
   if (!password) {
     res.status(400).json({ error: 'Enter your password.' });
+    return;
+  }
+
+  const existing = selectUserByEmail.get(email);
+
+  if (mode === 'login' && !existing) {
+    res.status(404).json({ error: 'No account exists for that email. Create a new account to start setup.' });
+    return;
+  }
+
+  if (mode === 'signup' && existing) {
+    res.status(409).json({ error: 'An account already exists for that email. Sign in instead.' });
     return;
   }
 
@@ -165,7 +178,11 @@ export function handleEmailLogin(req: Request, res: Response) {
   });
 
   createSession(res, user.id);
-  res.status(201).json({ user: serializeUser(user), googleAuthAvailable: isGoogleAuthConfigured() });
+  res.status(mode === 'signup' ? 201 : 200).json({
+    user: serializeUser(user),
+    googleAuthAvailable: isGoogleAuthConfigured(),
+    isNewUser: mode === 'signup',
+  });
 }
 
 export function handleLogout(req: Request, res: Response) {
@@ -274,6 +291,7 @@ export async function handleGoogleCallback(req: Request, res: Response) {
     return;
   }
 
+  const existing = selectUserByEmail.get(email);
   const user = upsertUser({
     email,
     name: profile.name || email.split('@')[0],
@@ -283,7 +301,7 @@ export async function handleGoogleCallback(req: Request, res: Response) {
   });
 
   createSession(res, user.id);
-  res.redirect(storedState.return_to);
+  res.redirect(existing ? storedState.return_to : `${config.appBaseUrl.replace(/\/$/, '')}/?view=setup`);
 }
 
 function upsertUser(input: {

@@ -1,7 +1,9 @@
 import { config, hasElevenLabs, hasOpenAI, hasOutboundTelephony, hasZoomWebhookSecret } from '../config.js';
+import { getModelInfo } from '../ai/risk-model.js';
 
 export function getProviderStatus() {
   return {
+    riskModel: getModelInfo(),
     openai: {
       configured: hasOpenAI(),
       model: config.openaiModel,

@@ -136,6 +136,9 @@ function buildCharts(metrics: ReturnType<typeof cleanMetrics>): WorkspaceChart[]
   const sensitive = Math.min(metrics.sensitiveEscalations, metrics.handoffs);
   const knowledgeGap = Math.min(metrics.retrievalMisses, Math.max(0, metrics.handoffs - sensitive));
   const billing = Math.max(0, metrics.handoffs - sensitive - knowledgeGap);
+  const containmentRate = Math.round((metrics.containedCalls / Math.max(1, metrics.callsHandled)) * 100);
+  const handoffRate = Math.round((metrics.handoffs / Math.max(1, metrics.callsHandled)) * 100);
+  const openRiskRate = Math.min(100, Math.round((metrics.openRisks / Math.max(1, metrics.callsHandled)) * 100));
 
   return [
     {
@@ -145,6 +148,16 @@ function buildCharts(metrics: ReturnType<typeof cleanMetrics>): WorkspaceChart[]
       data: hourly,
     },
     {
+      id: 'outcome-mix',
+      title: 'Customer outcome mix',
+      kind: 'progress',
+      data: [
+        { label: 'Solved by AI', value: metrics.containedCalls, display: `${containmentRate}%`, percent: containmentRate },
+        { label: 'Human handoff', value: metrics.handoffs, display: `${handoffRate}%`, percent: handoffRate },
+        { label: 'Open risk', value: metrics.openRisks, display: String(metrics.openRisks), percent: openRiskRate },
+      ],
+    },
+    {
       id: 'handoff-reasons',
       title: 'Handoff reasons',
       kind: 'progress',
@@ -152,6 +165,16 @@ function buildCharts(metrics: ReturnType<typeof cleanMetrics>): WorkspaceChart[]
         { label: 'Billing exception', value: billing, display: String(billing), percent: Math.round((billing / maxHandoff) * 100) },
         { label: 'Sensitive policy', value: sensitive, display: String(sensitive), percent: Math.round((sensitive / maxHandoff) * 100) },
         { label: 'Knowledge gap', value: knowledgeGap, display: String(knowledgeGap), percent: Math.round((knowledgeGap / maxHandoff) * 100) },
+      ],
+    },
+    {
+      id: 'knowledge-quality',
+      title: 'Knowledge quality',
+      kind: 'progress',
+      data: [
+        { label: 'Source coverage', value: metrics.citationCoverage, display: `${metrics.citationCoverage}%`, percent: metrics.citationCoverage },
+        { label: 'Lookup misses', value: metrics.retrievalMisses, display: String(metrics.retrievalMisses), percent: Math.min(100, metrics.retrievalMisses * 8) },
+        { label: 'Draft updates', value: metrics.draftAnswers, display: String(metrics.draftAnswers), percent: Math.min(100, metrics.draftAnswers * 12) },
       ],
     },
   ];

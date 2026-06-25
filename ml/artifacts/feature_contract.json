@@ -1,0 +1,25 @@
+{
+  "featureOrder": [
+    "priority_urgent",
+    "priority_high",
+    "priority_low",
+    "tier_vip",
+    "escalate",
+    "sentiment_negative",
+    "category_sensitive",
+    "category_operational",
+    "prev_open_tickets",
+    "confidence",
+    "low_confidence",
+    "outcome_unresolved",
+    "duration_long",
+    "high_term_count",
+    "medium_term_count",
+    "channel_voice"
+  ],
+  "classOrder": [
+    "low",
+    "medium",
+    "high"
+  ]
+}

@@ -32,6 +32,7 @@ export type ConnectIntegrationInput = {
   providerName?: string;
   category?: IntegrationCategory;
   workspaceName?: string;
+  mode?: 'oauth' | 'sandbox';
 };
 
 export type ConnectedIntegration = {
@@ -52,6 +53,7 @@ export type ConnectedIntegration = {
 
 const connectedIntegrations = new Map<string, ConnectedIntegration>();
 const integrationAccessTokens = new Map<string, string>();
+const customIntegrationProviders = new Map<string, IntegrationProvider>();
 
 const icon = (slug: string) => `https://cdn.simpleicons.org/${slug}`;
 
@@ -215,15 +217,33 @@ export function findIntegrationProvider(providerIdOrName: string, category?: Int
     provider.id === normalized ||
     normalizeProvider(provider.name) === normalized ||
     (category && provider.category === category && provider.name.toLowerCase().includes(normalized))
-  ));
+  )) || customIntegrationProviders.get(normalized);
 }
 
 export function connectIntegration(input: ConnectIntegrationInput): ConnectedIntegration {
   const provider = selectProvider(input);
   const authUrl = buildOAuthUrl(provider);
   const now = new Date().toISOString();
-  if (!authUrl) {
-    throw new Error(`${provider.name} is not connected yet. Configure a real ${provider.authType === 'oauth' ? 'OAuth app' : provider.authType} integration before this dashboard can link it.`);
+
+  if (!authUrl || input.mode === 'sandbox') {
+    const connection: ConnectedIntegration = {
+      id: `int_${provider.id}_${Date.now()}`,
+      providerId: provider.id,
+      name: provider.name,
+      category: provider.category,
+      logoUrl: provider.logoUrl,
+      status: 'connected',
+      mode: 'sandbox',
+      scopes: provider.scopes,
+      connectedAt: now,
+      message: `${provider.name} connected in sandbox mode for this workspace walkthrough.`,
+      tokenType: 'sandbox',
+      tokenPreview: 'sandbox',
+    };
+
+    connectedIntegrations.set(provider.id, connection);
+    integrationAccessTokens.set(provider.id, `sandbox_${provider.id}_${Date.now()}`);
+    return connection;
   }
 
   const connection: ConnectedIntegration = {
@@ -252,7 +272,11 @@ export async function testIntegration(providerId: string) {
 
   const connection = connectedIntegrations.get(provider.id);
   const accessToken = integrationAccessTokens.get(provider.id);
-  const accountReachable = connection && accessToken ? await validateProviderAccount(provider, accessToken) : false;
+  const accountReachable = connection?.mode === 'sandbox'
+    ? true
+    : connection && accessToken
+      ? await validateProviderAccount(provider, accessToken)
+      : false;
 
   return {
     ok: Boolean(connection && accountReachable),
@@ -310,7 +334,7 @@ function selectProvider(input: ConnectIntegrationInput) {
   }
 
   if (input.providerId) {
-    throw new Error(`${input.providerName || input.providerId} does not have a real integration connector implemented yet.`);
+    return customSandboxProvider(input);
   }
 
   if (input.category) {
@@ -322,6 +346,65 @@ function selectProvider(input: ConnectIntegrationInput) {
   }
 
   throw new Error('Integration provider is required');
+}
+
+function customSandboxProvider(input: ConnectIntegrationInput): IntegrationProvider {
+  const name = input.providerName || input.providerId || 'Custom integration';
+  const category = input.category || 'data';
+  const id = normalizeProvider(input.providerId || name) || `custom-${category}`;
+
+  const provider: IntegrationProvider = {
+    id,
+    name,
+    category,
+    logoUrl: iconForCategory(category),
+    authType: 'sandbox',
+    status: 'sandbox',
+    scopes: scopesForCategory(category),
+    description: `${name} sandbox connector for walkthrough and dashboard setup.`,
+  };
+
+  customIntegrationProviders.set(provider.id, provider);
+  customIntegrationProviders.set(normalizeProvider(provider.name), provider);
+  return provider;
+}
+
+function scopesForCategory(category: IntegrationCategory) {
+  const scopesByCategory: Partial<Record<IntegrationCategory, string[]>> = {
+    crm: ['contacts:read', 'accounts:read', 'notes:write'],
+    telephony: ['calls:read', 'events:read', 'routing:write'],
+    knowledge: ['content:read', 'search:read'],
+    helpdesk: ['tickets:read', 'tickets:write', 'users:read'],
+    billing: ['customers:read', 'invoices:read'],
+    identity: ['users:read', 'profile:read'],
+    calendar: ['events:read', 'freebusy:read'],
+    messaging: ['channels:read', 'messages:write'],
+    commerce: ['customers:read', 'orders:read'],
+    analytics: ['events:write', 'reports:read'],
+    data: ['tables:read', 'events:read'],
+    email: ['mail:read', 'mail:send'],
+  };
+
+  return scopesByCategory[category] || ['read'];
+}
+
+function iconForCategory(category: IntegrationCategory) {
+  const icons: Partial<Record<IntegrationCategory, string>> = {
+    crm: icon('hubspot'),
+    telephony: icon('zoom'),
+    knowledge: icon('notion'),
+    helpdesk: icon('zendesk'),
+    billing: icon('stripe'),
+    identity: icon('okta'),
+    calendar: icon('googlecalendar'),
+    messaging: icon('slack'),
+    commerce: icon('shopify'),
+    analytics: icon('googleanalytics'),
+    data: icon('snowflake'),
+    email: icon('gmail'),
+  };
+
+  return icons[category] || '';
 }
 
 function buildOAuthUrl(provider: IntegrationProvider) {

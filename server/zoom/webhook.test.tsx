@@ -68,3 +68,30 @@ test('Zoom Contact Center transcript event creates an AI support ticket', async 
   assert.equal(result.ticket.channel, 'voice');
   assert.equal(result.ticket.customerId, 'cus_001');
 });
+
+test('Zoom Contact Center ticket includes risk scoring metadata', async () => {
+  const result = await handleZoomContactCenterEvent(
+    {
+      event: 'contact_center.engagement_ended',
+      payload: {
+        object: {
+          channel: 'voice',
+          caller_number: '+447700900111',
+          transcript: [
+            { role: 'customer', content: 'This is fraud, I am angry, and I want a manager before legal action.' },
+            { role: 'virtual_agent', content: 'I will escalate this to the support team.' },
+          ],
+        },
+      },
+    },
+    { mockAi: true },
+  );
+
+  assert.equal(result.type, 'ticket_created');
+  assert.ok(result.ticket);
+  assert.equal(result.ticket.riskLevel, 'high');
+  assert.ok(typeof result.ticket.riskScore === 'number' && result.ticket.riskScore >= 75);
+  assert.equal(result.ticket.humanReviewRequired, true);
+  assert.ok(result.ticket.riskSignals?.some((signal) => /zoom|contact center|voice/i.test(`${signal.label} ${signal.value}`)));
+  assert.ok(result.ticket.riskReasons?.some((reason) => /fraud|legal|manager|angry|escalat/i.test(`${reason.factor} ${reason.impact}`)));
+});

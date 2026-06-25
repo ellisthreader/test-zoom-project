@@ -1,0 +1,8 @@
+# Azure ML managed online endpoint.
+# Create with: az ml online-endpoint create -f azure/endpoint.yml
+# The endpoint name must be unique within the Azure region; override at create
+# time with --name if needed (see register_and_deploy.sh).
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
+name: relayclarity-risk
+description: RelayClarity risk-scoring model served as an Azure ML managed online endpoint.
+auth_mode: key

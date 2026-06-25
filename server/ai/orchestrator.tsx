@@ -2,6 +2,9 @@ import { findCustomer } from '../adapters/crm.js';
 import { createTicket } from '../adapters/helpdesk.js';
 import { searchKnowledgeBase } from '../adapters/kb.js';
 import { createJsonResponse } from './client.js';
+import { applyRiskToTicketInput } from './risk-scoring.js';
+import { scoreRisk } from './risk-model.js';
+import { recordPrediction } from './monitoring.js';
 import { detectCategory, detectPriority, normalizePriority, shouldEscalate } from './schema.js';
 import type { Customer, CustomerLookup, TicketInput, TranscriptTurn } from '../types.js';
 
@@ -296,7 +299,7 @@ export async function createTicketFromConversation({ channel = 'chat', customer 
         fallback,
       });
 
-  return createTicket({
+  const normalizedTicket = {
     ...ticketDraft,
     category: normalizeCategory(ticketDraft.category),
     priority: normalizePriority(ticketDraft.priority),
@@ -305,7 +308,23 @@ export async function createTicketFromConversation({ channel = 'chat', customer 
     customerSnapshot: crmCustomer || customer || null,
     transcript: text,
     escalate: shouldEscalate(text, crmCustomer) || ticketDraft.priority === 'urgent',
-  });
+  };
+  const riskInput = {
+    channel,
+    category: normalizedTicket.category,
+    priority: normalizedTicket.priority,
+    sentiment: normalizedTicket.sentiment,
+    customerTier: crmCustomer?.tier,
+    previousOpenTickets: crmCustomer?.openTickets.length || 0,
+    confidence: mockAi ? 0.72 : undefined,
+    escalate: normalizedTicket.escalate,
+    transcriptText: text,
+    sourceSystem: channel,
+  };
+  const risk = scoreRisk(riskInput);
+  recordPrediction(risk, riskInput);
+
+  return createTicket(applyRiskToTicketInput(normalizedTicket, risk));
 }
 
 export async function buildAgentPlan({ instruction, currentConfig = {}, mockAi = false }: BuilderPlanRequest) {

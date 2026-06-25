@@ -15,7 +15,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "video:preview": "remotion studio remotion/index.tsx",
     "video:render": "remotion render remotion/index.tsx RelayClarityLaunchVideo public/relayclarity-launch-video.mp4 --codec=h264",
-    "test": "tsx --test src/business-type-matcher.test.ts server/ai/client.test.tsx server/ai/orchestrator.test.tsx server/voice/elevenlabs.test.tsx server/zoom/webhook.test.tsx server/adapters/integrations.test.tsx server/telephony/audio-store.test.tsx",
+    "test": "tsx --test src/business-type-matcher.test.ts server/ai/client.test.tsx server/ai/orchestrator.test.tsx server/ai/risk-scoring.test.tsx server/ai/risk-model.test.tsx server/ai/parity.test.tsx server/ai/feedback-store.test.tsx server/ai/monitoring.test.tsx server/ai/launch-tests.test.tsx server/voice/elevenlabs.test.tsx server/zoom/webhook.test.tsx server/adapters/integrations.test.tsx server/telephony/audio-store.test.tsx",
+    "ml:pipeline": "ml/.venv/bin/python ml/generate_data.py && ml/.venv/bin/python ml/train.py --trained-at \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" && ml/.venv/bin/python ml/evaluate.py",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

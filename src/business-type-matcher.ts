@@ -34,6 +34,8 @@ const weakInputTerms = new Set([
   "team"
 ]);
 
+const strongShortInputTerms = new Set(["3pl", "ai", "gp", "it", "ml"]);
+
 const preservedWords: Record<string, string> = {
   api: "API",
   b2b: "B2B",
@@ -123,11 +125,11 @@ function applyBusinessInputCorrections(value: string): string {
 
 function canSearchBusinessInput(normalizedInput: string): boolean {
   if (normalizedInput.length < 3) {
-    return false;
+    return strongShortInputTerms.has(normalizedInput);
   }
 
   const words = normalizedInput.split(" ").filter(Boolean);
-  return words.some((word) => word.length >= 3 && !weakInputTerms.has(word));
+  return words.some((word) => strongShortInputTerms.has(word) || (word.length >= 3 && !weakInputTerms.has(word)));
 }
 
 function scoreBusinessEntries(normalizedInput: string, taxonomy: readonly BusinessTaxonomyEntry[]): BusinessEntryMatch[] {
@@ -242,7 +244,7 @@ function meaningfulWords(value: string): string[] {
   return value
     .split(" ")
     .map((word) => word.trim())
-    .filter((word) => word.length >= 3 && !weakInputTerms.has(word));
+    .filter((word) => strongShortInputTerms.has(word) || (word.length >= 3 && !weakInputTerms.has(word)));
 }
 
 function uniqueTerms(terms: readonly string[]): string[] {
