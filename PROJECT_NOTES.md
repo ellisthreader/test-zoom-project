@@ -105,3 +105,25 @@ The `/integrations` hero logo cloud is a good example of restrained parallax scr
 - Animate individual logo tiles subtly: spread outward/down, rotate slightly, sharpen blur, and lift the overall cloud.
 - Preserve reduced-motion behavior by disabling scroll transforms when `useReducedMotion()` is true.
 - Avoid decorative noise; the movement should reveal the breadth of integrations without making the hero feel busy.
+
+## Regression Note: Voice Step Preview vs Confirmation
+
+Date logged: 2026-07-09
+
+Problem found:
+
+- The Step 4 voice picker was treating a voice tile click as both preview and confirmation.
+- That meant the pre-generated confirmation audio, such as "thanks for picking Adam", could play before the user actually confirmed the choice.
+- The intended behavior is: tile click previews the normal sample only; the confirmation MP3 plays only when the user presses `Continue` from the voice picker into the voice settings review.
+
+Fix/guardrail:
+
+- `selectedVoiceId` is the current previewed choice.
+- `confirmedVoiceId` is only set in the Voice step `Continue` path.
+- `hasSelectedVoice` enables the first Voice step `Continue` button only after the user has actively picked a voice.
+- `server/voice/voice-step-regression.test.tsx` guards this contract so tile clicks cannot be wired back to `playVoiceConfirmation(voice)` or `setConfirmedVoiceId(voice.id)` unnoticed.
+
+Browser verification note:
+
+- Chrome CDP smoke attempts must navigate to `http://localhost:5173` before browser-side `/api/*` calls. Calling `/api/auth/signup` from `about:blank` has no app origin and can fail as `TypeError: Failed to fetch`.
+- If Vite is not listening on `5173`, check for another Vite process on an alternate port before assuming the product flow failed. The backend can remain up on `8787` while the frontend is unavailable.

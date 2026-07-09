@@ -38901,6 +38901,46 @@ h1 span:last-child {
 }
 
 @media (max-width: 860px) {
+  .completed-dashboard {
+    grid-template-columns: 64px minmax(0, 1fr) !important;
+  }
+
+  .completed-dashboard .completed-sidebar {
+    align-items: center !important;
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    padding: 12px 8px !important;
+  }
+
+  .completed-dashboard .completed-brand {
+    width: 42px !important;
+    min-height: 42px !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+  }
+
+  .completed-dashboard .completed-brand img {
+    width: 42px !important;
+    max-width: none !important;
+  }
+
+  .completed-dashboard .completed-thread-list.completed-metrics-nav button,
+  .completed-dashboard .completed-ai-chat-tab {
+    grid-template-columns: 40px !important;
+    justify-content: center !important;
+    width: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+  }
+
+  .completed-dashboard .completed-thread-list.completed-metrics-nav span,
+  .completed-dashboard .completed-ai-chat-tab strong,
+  .completed-dashboard .completed-metrics-account div,
+  .completed-dashboard .completed-metrics-account b {
+    display: none !important;
+  }
+
   .completed-dashboard:has(.completed-route-page.is-ops),
   .completed-dashboard:has(.completed-route-page.is-conversations),
   .completed-dashboard:has(.completed-route-page.is-calls),

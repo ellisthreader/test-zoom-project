@@ -8449,13 +8449,13 @@ function Dashboard({
         generatedVoiceUrlRef.current = url;
         setActiveAudioUrl(url);
         playTestVoiceUrl(url);
-        setVoiceRegenerationStatus(`${selectedVoice.name}'s voice has been updated.`);
+        setVoiceRegenerationStatus("Voice regenerated. Playing preview.");
         return;
       }
 
       setActiveAudioUrl(selectedVoice.sampleAudioUrl);
       playVoiceSample(selectedVoice);
-      setVoiceRegenerationStatus(result.message || "Voice generation is in mock mode. Playing the selected sample.");
+      setVoiceRegenerationStatus(result.message || "Voice regenerated. Playing preview.");
     } catch (error) {
       const failedAttempts = voiceRegenerationAttemptsRef.current.filter((time) => time !== now);
       voiceRegenerationAttemptsRef.current = failedAttempts;
@@ -10561,9 +10561,14 @@ function Dashboard({
                                     </div>
                                     </section>
 
-                                    <div className="voice-playback voice-playback-review">
-                                      <audio ref={audioRef} src={activeAudioUrl} data-active-voice-id={selectedVoice.id} controls preload="auto" />
-                                    </div>
+                                    <audio
+                                      ref={audioRef}
+                                      className="voice-hidden-playback"
+                                      src={activeAudioUrl}
+                                      data-active-voice-id={selectedVoice.id}
+                                      preload="auto"
+                                      aria-hidden="true"
+                                    />
                                   </div>
                                 </details>
                               </motion.section>
@@ -10903,19 +10908,6 @@ function Dashboard({
 
                   {step === 5 ? (
                     <section className={`launch-request-panel ${launchRequestSubmitted ? "is-submitted" : ""}`}>
-                      <div className="launch-flat-top">
-                        <div>
-                          <span>{launchRequestSubmitted ? "Submitted" : launchStage === "review" ? "Review details" : "Live route"}</span>
-                          <h2>{launchStage === "review" ? "Review the details" : "Add launch contact"}</h2>
-                          <p>
-                            {launchStage === "review"
-                              ? "Check the setup that will be sent to engineering."
-                              : "Add the live website and phone route for production setup."}
-                          </p>
-                        </div>
-                        <strong>{launchRequestSubmitted ? "Submitted" : launchStage === "review" ? "Step 1 of 2" : "Step 2 of 2"}</strong>
-                      </div>
-
                       <div className="launch-flat-flow" aria-label="Launch request workflow">
                         <span className={launchStage === "review" ? "is-active" : "is-complete"}><b>1</b> Review details</span>
                         <span className={launchStage === "contact" ? "is-active" : ""}><b>2</b> Add contact</span>
@@ -10926,7 +10918,6 @@ function Dashboard({
                           <section className="launch-flat-section" aria-label="Setup details">
                             <header>
                               <span>Setup details</span>
-                              <p>Core details for engineering.</p>
                             </header>
                             <div className="launch-flat-list">
                               {launchFlatSummaryRows.map((row) => (
@@ -10941,7 +10932,6 @@ function Dashboard({
                           <section className="launch-flat-section" aria-label="Agent scope">
                             <header>
                               <span>Agent scope</span>
-                              <p>What the agent is expected to handle.</p>
                             </header>
                             <div className="launch-flat-list">
                               {launchFlatScopeRows.map((row) => (
@@ -10958,7 +10948,6 @@ function Dashboard({
                           <section className="launch-flat-section" aria-label="Production contact details">
                             <header>
                               <span>Contact details</span>
-                              <p>Use the final customer-facing route.</p>
                             </header>
                             <div className="launch-request-fields">
                               <label>
@@ -14525,6 +14514,7 @@ function CompletedOnboardingDashboard({
           type="button"
           onClick={() => changeActiveRoute("ai")}
           aria-label="Open AI Chat"
+          aria-current={activeRoute === "ai" ? "page" : undefined}
           title="AI Chat"
         >
           <strong>AI Chat</strong>

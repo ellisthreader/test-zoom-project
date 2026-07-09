@@ -15,7 +15,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "video:preview": "remotion studio remotion/index.tsx",
     "video:render": "remotion render remotion/index.tsx RelayClarityLaunchVideo public/relayclarity-launch-video.mp4 --codec=h264",
-    "test": "tsx --test server/ai/client.test.tsx server/ai/orchestrator.test.tsx server/voice/elevenlabs.test.tsx server/zoom/webhook.test.tsx server/adapters/integrations.test.tsx server/adapters/kb.test.tsx server/telephony/audio-store.test.tsx",
+    "test": "tsx --test server/ai/client.test.tsx server/ai/orchestrator.test.tsx server/voice/elevenlabs.test.tsx server/voice/voice-step-regression.test.tsx server/zoom/webhook.test.tsx server/adapters/integrations.test.tsx server/adapters/kb.test.tsx server/telephony/audio-store.test.tsx",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
