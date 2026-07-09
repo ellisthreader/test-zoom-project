@@ -10752,9 +10752,8 @@ function Dashboard({
                       <section className={`test-cinematic-runner ${testRunState === "running" ? "is-running" : ""} ${testsComplete ? "is-complete" : ""}`} aria-label="Automated launch test sequence" aria-live="polite" data-setup-focus="tests" tabIndex={-1}>
                         <div className="test-cinematic-header">
                           <div>
-                            <span>Launch simulation</span>
-                            <h2>Run the full production test sequence</h2>
-                            <p>{testsComplete ? `${agentDisplayName} passed the six-stage launch gate at ${launchGateScore}%.` : testRunState === "running" ? `Running ${activeCinematicTest.label}: ${activeCinematicTest.scene}.` : "Start with six checks. Each box runs in order and streams the current test below."}</p>
+                            <span>{testsComplete ? "6/6 passed" : `${completedRunCount}/${cinematicTestStages.length} complete`}</span>
+                            <h2>{testRunState === "running" ? `Running ${activeCinematicTest.label}` : testsComplete ? "All tests passed" : "Tests"}</h2>
                           </div>
                           <button className="test-run-master-button" type="button" onClick={runLaunchTests} disabled={testRunState === "running"}>
                             <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -14332,7 +14331,7 @@ function CompletedOnboardingDashboard({
       kpis: [
         { label: "Health score", value: `${launchGateScore}%`, trend: launchGateAllowed ? "Healthy" : "Needs review", tone: launchGateAllowed ? "green" : "amber", icon: "HS" },
         { label: "Safety", value: `${launchGateSafetyScore}%`, trend: liveMetrics.policyViolations === 0 ? "No critical breaks" : "Review rules", tone: liveMetrics.policyViolations === 0 ? "green" : "red", icon: "SF" },
-        { label: "Knowledge", value: `${liveMetrics.citationCoverage}%`, trend: `${liveMetrics.staleSources} stale sources`, tone: liveMetrics.staleSources ? "amber" : "blue", icon: "KG" },
+        { label: "Knowledge", value: `${liveMetrics.citationCoverage}%`, trend: liveMetrics.staleSources === 1 ? "1 source stale" : `${liveMetrics.staleSources} sources stale`, tone: liveMetrics.staleSources ? "amber" : "blue", icon: "KG" },
         { label: "Tool health", value: `${launchGateConnectionScore}%`, trend: launchGateRequiredConnectionsPassed ? "Passing" : "Fix required", tone: launchGateRequiredConnectionsPassed ? "green" : "red", icon: "TH" }
       ],
       detail: {
