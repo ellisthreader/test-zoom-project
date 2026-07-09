@@ -9579,23 +9579,27 @@ function Dashboard({
 
   const submittedValue = (value: string, fallback = "Not provided") => value.trim() || fallback;
   const connectedLaunchSystems = connectors.filter((connector) => connector.connected);
+  const launchAccessRows = [
+    { label: "Website URL", value: submittedValue(websiteUrl), editTarget: "website-url" },
+    { label: "Phone contact", value: submittedValue(phoneContactNumber), editTarget: "phone-contact" }
+  ];
   const launchFlatSummaryRows = [
-    { label: "Workspace", value: confirmedWorkspaceName },
-    { label: "Business type", value: submittedValue(confirmedBusinessType, playbook.label) },
-    { label: "Agent", value: agentDisplayName },
-    { label: "First channel", value: launchChannel },
-    { label: "Goals", value: selectedGoals.join(", ") || playbook.goals.slice(0, 2).map((goal) => goal.title).join(", ") || "Review launch goals" }
+    { label: "Workspace", value: confirmedWorkspaceName, editTarget: "workspace-name" },
+    { label: "Business type", value: submittedValue(confirmedBusinessType, playbook.label), editTarget: "business-type" },
+    { label: "Agent", value: agentDisplayName, editTarget: "agent-name" },
+    { label: "First channel", value: launchChannel, editTarget: "launch-channel" },
+    { label: "Goals", value: selectedGoals.join(", ") || playbook.goals.slice(0, 2).map((goal) => goal.title).join(", ") || "Review launch goals", editTarget: "goals" }
   ];
   const launchFlatScopeRows = [
-    { label: "Capabilities", value: selectedCapabilities.join(", ") || "Add capabilities before launch" },
-    { label: "Connected systems", value: connectedLaunchSystems.map((connector) => connector.provider).join(", ") || "Connect required systems" },
-    { label: "Instructions", value: submittedValue(agentPurpose, useCase) },
-    { label: "Knowledge", value: submittedValue(agentKnowledge, primaryKnowledgeSource) },
-    { label: "Handoff", value: submittedValue(agentHandoff, "Escalate with summary and next step") },
-    { label: "Voice", value: `${selectedVoice.name} - ${selectedVoice.tone}` },
-    { label: "Voice settings", value: `${voiceStability}% stable, ${voiceSimilarity}% similar, ${voiceSpeed.toFixed(2)}x speed` },
-    { label: "Platform notes", value: submittedValue(otherPlatformNote, "None") },
-    { label: "Tests", value: testRunState === "complete" ? `${launchGateScore}% launch score` : `${completedRunCount} of ${cinematicTestStages.length} checks complete` }
+    { label: "Capabilities", value: selectedCapabilities.join(", ") || "Add capabilities before launch", editTarget: "capabilities" },
+    { label: "Connected systems", value: connectedLaunchSystems.map((connector) => connector.provider).join(", ") || "Connect required systems", editTarget: "connected-systems" },
+    { label: "Instructions", value: submittedValue(agentPurpose, useCase), editTarget: "agent-instructions" },
+    { label: "Knowledge", value: submittedValue(agentKnowledge, primaryKnowledgeSource), editTarget: "agent-knowledge" },
+    { label: "Handoff", value: submittedValue(agentHandoff, "Escalate with summary and next step"), editTarget: "agent-handoff" },
+    { label: "Voice", value: `${selectedVoice.name} - ${selectedVoice.tone}`, editTarget: "voice" },
+    { label: "Voice settings", value: `${voiceStability}% stable, ${voiceSimilarity}% similar, ${voiceSpeed.toFixed(2)}x speed`, editTarget: "voice-settings" },
+    { label: "Platform notes", value: submittedValue(otherPlatformNote, "None"), editTarget: "platform-notes" },
+    { label: "Tests", value: testRunState === "complete" ? `${launchGateScore}% launch score` : `${completedRunCount} of ${cinematicTestStages.length} checks complete`, editTarget: "tests" }
   ];
 
   return (
@@ -11062,13 +11066,25 @@ function Dashboard({
 
                   {step === 5 ? (
                     <section className={`launch-request-panel ${launchRequestSubmitted ? "is-submitted" : ""}`}>
-                      <div className="launch-flat-flow" aria-label="Launch request workflow">
-                        <span className={launchStage === "review" ? "is-active" : "is-complete"}><b>1</b> Review details</span>
-                        <span className={launchStage === "contact" ? "is-active" : ""}><b>2</b> Add contact</span>
-                      </div>
-
                       {launchStage === "review" ? (
                         <>
+                          <section className="launch-flat-section" aria-label="Launch access">
+                            <header>
+                              <span>Launch access</span>
+                            </header>
+                            <div className="launch-flat-list">
+                              {launchAccessRows.map((row) => (
+                                <p key={row.label}>
+                                  <span>{row.label}</span>
+                                  <strong>{row.value}</strong>
+                                  <button type="button" onClick={() => editLaunchReviewDetail(row.editTarget)}>
+                                    Edit
+                                  </button>
+                                </p>
+                              ))}
+                            </div>
+                          </section>
+
                           <section className="launch-flat-section" aria-label="Setup details">
                             <header>
                               <span>Setup details</span>
@@ -11078,6 +11094,9 @@ function Dashboard({
                                 <p key={row.label}>
                                   <span>{row.label}</span>
                                   <strong>{row.value}</strong>
+                                  <button type="button" onClick={() => editLaunchReviewDetail(row.editTarget)}>
+                                    Edit
+                                  </button>
                                 </p>
                               ))}
                             </div>
@@ -11092,6 +11111,9 @@ function Dashboard({
                                 <p key={row.label}>
                                   <span>{row.label}</span>
                                   <strong>{row.value}</strong>
+                                  <button type="button" onClick={() => editLaunchReviewDetail(row.editTarget)}>
+                                    Edit
+                                  </button>
                                 </p>
                               ))}
                             </div>
@@ -14085,21 +14107,26 @@ function CompletedOnboardingDashboard({
     value: String(reason.value),
     percent: reason.percent
   }));
-  const billingListItems: OpsListItem[] = [
-    { id: "billing-plan", title: "Plan and subscription", subtitle: completedLaunchDetails[0].value, detail: launchGateAllowed ? "Workspace is ready for the active launch plan." : "Workspace is in review until checks clear.", meta: launchGateAllowed ? "Ready" : "Review", badge: launchGateAllowed ? "Ready" : "Needs review", tone: launchGateAllowed ? "green" : "amber" },
-    { id: "billing-invoice", title: "Invoice setup", subtitle: "Billing contact", detail: completedLaunchDetails[3].value === "Not provided" ? "Billing contact still needs to be confirmed." : `Use ${completedLaunchDetails[3].value} for billing checks.`, meta: "Setup", badge: "Pending", tone: "purple" },
-    { id: "billing-usage", title: "Usage summary", subtitle: "Today", detail: `${liveMetrics.callsHandled} calls tracked with ${liveMetrics.handoffs} review items.`, meta: "Live", badge: "Usage", tone: "blue" },
-    { id: "billing-proof", title: "Readiness check", subtitle: "Launch status", detail: launchGateAllowed ? "All critical checks are clear." : launchGateFixSummary, meta: `${launchGateScore}%`, badge: "Checks", tone: launchGateAllowed ? "green" : "red" }
+  const modelHealthListItems: OpsListItem[] = [
+    { id: "health-overall", title: "Overall health", subtitle: "Live model", detail: launchGateAllowed ? "Model is ready for customer traffic." : launchGateStatusDetail, meta: `${launchGateScore}%`, badge: launchGateAllowed ? "Healthy" : "Review", tone: launchGateAllowed ? "green" : "amber" },
+    { id: "health-safety", title: "Safety rules", subtitle: "Policy checks", detail: liveMetrics.policyViolations === 0 ? "No critical rule breaks detected." : `${liveMetrics.policyViolations} critical rule break needs review.`, meta: `${launchGateSafetyScore}%`, badge: liveMetrics.policyViolations === 0 ? "Clear" : "Risk", tone: liveMetrics.policyViolations === 0 ? "green" : "red" },
+    { id: "health-knowledge", title: "Knowledge grounding", subtitle: "Answer sources", detail: `${liveMetrics.citationCoverage}% of answers are backed by approved sources.`, meta: `${liveMetrics.knowledgeSyncMinutes}m sync`, badge: liveMetrics.staleSources ? "Watch" : "Fresh", tone: liveMetrics.staleSources ? "amber" : "blue" },
+    { id: "health-systems", title: "Tool health", subtitle: "Connected systems", detail: launchGateRequiredConnectionsPassed ? "Required tools are connected and passing." : "A required tool needs attention before launch.", meta: `${launchGateConnectionScore}%`, badge: launchGateRequiredConnectionsPassed ? "Passing" : "Fix", tone: launchGateRequiredConnectionsPassed ? "green" : "red" }
   ];
-  const billingRows = [
-    { label: "Customer", value: completedLaunchDetails[0].value, note: "Billing account" },
-    { label: "Business type", value: completedLaunchDetails[1].value, note: "Plan context" },
-    { label: "Phone contact", value: completedLaunchDetails[3].value, note: "Billing and launch contact" },
-    { label: "Readiness", value: `${launchGateScore}%`, note: launchGateAllowed ? "Ready for activation" : launchGateStatusDetail }
+  const modelHealthRows = [
+    { label: "Health score", value: `${launchGateScore}%`, note: launchGateAllowed ? "Ready for customer traffic" : launchGateStatusDetail },
+    { label: "Reply time", value: `${latencySeconds}s`, note: "95% of voice replies" },
+    { label: "Solved by AI", value: `${containmentRate}%`, note: `${liveMetrics.containedCalls} customers helped without staff` },
+    { label: "Open risks", value: String(liveMetrics.openRisks), note: "Needs review before scale-up" }
   ];
-  const billingSystemRows = completedLaunchSystems.length
-    ? completedLaunchSystems.map((system) => ({ label: system, value: "Submitted", note: "Included in scope" }))
-    : [{ label: "Connected systems", value: "None submitted", note: "Confirm required systems before activation" }];
+  const modelHealthSystemRows = launchGateRequiredConnections.length
+    ? launchGateRequiredConnections.map((system) => ({ label: system.name, value: system.health, note: `${system.provider} ${system.status.toLowerCase()}` }))
+    : [{ label: "Required tools", value: "None set", note: "Connect tools before launch" }];
+  const modelHealthRiskRows = [
+    { label: "Safety", value: liveMetrics.policyViolations === 0 ? "Clear" : "Review", note: `${liveMetrics.policyViolations} critical events` },
+    { label: "Knowledge", value: liveMetrics.staleSources ? "Watch" : "Fresh", note: `${liveMetrics.retrievalMisses} missing answers` },
+    { label: "Systems", value: launchGateRequiredConnectionsPassed ? "Passing" : "Fix", note: `${liveMetrics.webhookErrors} webhook errors` }
+  ];
   const opsDashboardPages: Partial<Record<string, OpsPageConfig>> = {
     metrics: {
       id: "metrics",
