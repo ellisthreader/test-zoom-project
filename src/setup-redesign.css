@@ -4301,7 +4301,7 @@
 
 .onboarding-shell .launch-flat-flow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   border-top: 1px solid rgba(15, 23, 42, 0.12);
   border-bottom: 1px solid rgba(15, 23, 42, 0.12);
@@ -4359,6 +4359,11 @@
   gap: 12px;
   padding-bottom: 20px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.onboarding-shell .launch-request-panel > .launch-flat-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .onboarding-shell .launch-flat-scope {
