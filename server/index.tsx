@@ -4,18 +4,23 @@ import cors from 'cors';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { config, hasOpenAI } from './config.js';
-import { handleCurrentUser, handleEmailLogin, handleGoogleCallback, handleGoogleStart, handleLogout, requireAuth } from './auth.js';
+import { getRequestUser, handleCurrentUser, handleEmailLogin, handleEmailSignup, handleGoogleCallback, handleGoogleStart, handleListProjects, handleLogout, handleOnboardingComplete, handlePasswordResetConfirm, handlePasswordResetRequest, handleSaveProject, requireAuth } from './auth.js';
 import { listKnowledgeBase } from './adapters/kb.js';
 import { listTickets } from './adapters/helpdesk.js';
 import { connectIntegration, finalizeOAuthConnection, getConnectedIntegrations, listIntegrationProviders, testIntegration } from './adapters/integrations.js';
+import { runIntegrationAction } from './adapters/live-integrations.js';
 import { buildAgentPlan, createTicketFromConversation, runCustomerTurn, runDemoCustomerTurn } from './ai/orchestrator.js';
 import { runWorkspaceAssistant } from './ai/workspace.js';
 import { createRealtimeClientSecret } from './ai/client.js';
 import { synthesizeSpeech } from './voice/elevenlabs.js';
+import { checkVoiceRateLimit, recordVoiceRequest } from './voice/rate-limit.js';
 import { getProviderStatus } from './providers/status.js';
-import { placeOutboundDemoCall } from './telephony/outbound.js';
+import { normalizeDemoPhone, placeOutboundDemoCall } from './telephony/outbound.js';
+import { checkCallRateLimit, recordCall } from './telephony/rate-limit.js';
 import { getTelephonyAudio } from './telephony/audio-store.js';
 import { handleZoomContactCenterEvent, verifyZoomWebhookSignature } from './zoom/webhook.js';
+import { handleContactSalesSubmission } from './contact-sales.js';
+import { handleCreateCheckoutSession, handleRetrieveCheckoutSession } from './billing.js';
 import type { ZoomWebhookEvent } from './types.js';
 
 export function createApp() {
@@ -50,6 +55,8 @@ export function createApp() {
     res.json({
       ok: true,
       service: 'relayclarity-ai-backend',
+      workspaceRoot: process.cwd(),
+      authSchemaVersion: 2,
       openai: hasOpenAI() ? 'configured' : 'mock_fallback',
     });
   });
@@ -58,11 +65,51 @@ export function createApp() {
     res.json(getProviderStatus());
   });
 
+  app.post('/api/contact-sales', async (req, res, next) => {
+    try {
+      await handleContactSalesSubmission(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/billing/checkout-session', (req, res) => {
+    const user = requireAuth(req, res);
+    if (!user) {
+      return;
+    }
+
+    handleCreateCheckoutSession(req, res, user);
+  });
+
+  app.get('/api/billing/checkout-session', (req, res) => {
+    const user = requireAuth(req, res);
+    if (!user) {
+      return;
+    }
+
+    handleRetrieveCheckoutSession(req, res, user);
+  });
+
   app.get('/api/auth/me', handleCurrentUser);
 
   app.post('/api/auth/email', handleEmailLogin);
 
+  app.post('/api/auth/signup', handleEmailSignup);
+
+  app.post('/api/auth/password-reset/request', async (req, res, next) => {
+    try {
+      await handlePasswordResetRequest(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/auth/password-reset/confirm', handlePasswordResetConfirm);
+
   app.post('/api/auth/logout', handleLogout);
+
+  app.post('/api/auth/onboarding/complete', handleOnboardingComplete);
 
   app.get('/api/auth/google/start', handleGoogleStart);
 
@@ -86,6 +133,10 @@ export function createApp() {
     res.json({ user: requireAuth(req, res) });
   });
 
+  app.get('/api/dashboard/projects', handleListProjects);
+
+  app.post('/api/dashboard/projects', handleSaveProject);
+
   app.post('/api/dashboard/assistant', async (req, res, next) => {
     try {
       res.json(await runWorkspaceAssistant(req.body));
@@ -102,16 +153,26 @@ export function createApp() {
     res.json({ items: await listTickets() });
   });
 
-  app.get('/api/integrations/catalog', (_req, res) => {
+  app.get('/api/integrations/catalog', (req, res) => {
+    const user = requireAuth(req, res);
+    if (!user) {
+      return;
+    }
+
     res.json({
-      providers: listIntegrationProviders(),
-      connected: getConnectedIntegrations(),
+      providers: listIntegrationProviders(user.id),
+      connected: getConnectedIntegrations(user.id),
     });
   });
 
   app.post('/api/integrations/connect', (req, res, next) => {
     try {
-      res.status(201).json(connectIntegration(req.body));
+      const user = requireAuth(req, res);
+      if (!user) {
+        return;
+      }
+
+      res.status(201).json(connectIntegration(req.body, user.id));
     } catch (error) {
       next(error);
     }
@@ -119,7 +180,25 @@ export function createApp() {
 
   app.post('/api/integrations/:providerId/test', async (req, res, next) => {
     try {
-      res.json(await testIntegration(req.params.providerId));
+      const user = requireAuth(req, res);
+      if (!user) {
+        return;
+      }
+
+      res.json(await testIntegration(req.params.providerId, user.id));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/integrations/:providerId/action', async (req, res, next) => {
+    try {
+      const user = requireAuth(req, res);
+      if (!user) {
+        return;
+      }
+
+      res.json(await runIntegrationAction(user.id, req.params.providerId, req.body));
     } catch (error) {
       next(error);
     }
@@ -128,7 +207,8 @@ export function createApp() {
   app.get('/api/integrations/oauth/:provider/callback', async (req, res, next) => {
     try {
       const code = typeof req.query.code === 'string' ? req.query.code : '';
-      const connection = code ? await finalizeOAuthConnection(req.params.provider, code) : null;
+      const state = typeof req.query.state === 'string' ? req.query.state : '';
+      const connection = code ? await finalizeOAuthConnection(req.params.provider, code, state) : null;
 
       res.type('html').send(`<!doctype html>
 <html lang="en">
@@ -148,7 +228,11 @@ export function createApp() {
 
   app.post('/api/ai/chat', async (req, res, next) => {
     try {
-      res.json(await runCustomerTurn(req.body));
+      const user = getRequestUser(req);
+      res.json(await runCustomerTurn({
+        ...req.body,
+        integrationUserId: user?.id || '',
+      }));
     } catch (error) {
       next(error);
     }
@@ -164,7 +248,11 @@ export function createApp() {
 
   app.post('/api/ai/tickets/from-conversation', async (req, res, next) => {
     try {
-      res.status(201).json(await createTicketFromConversation(req.body));
+      const user = getRequestUser(req);
+      res.status(201).json(await createTicketFromConversation({
+        ...req.body,
+        integrationUserId: user?.id || '',
+      }));
     } catch (error) {
       next(error);
     }
@@ -188,7 +276,18 @@ export function createApp() {
 
   app.post('/api/voice/speech', async (req, res, next) => {
     try {
-      res.json(await synthesizeSpeech(req.body));
+      const forwarded = req.headers['x-forwarded-for'];
+      const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim() || req.ip || 'unknown';
+      const verdict = checkVoiceRateLimit(ip);
+
+      if (!verdict.allowed) {
+        res.status(429).json({ error: verdict.reason, retryAfterSeconds: verdict.retryAfterSeconds });
+        return;
+      }
+
+      const result = await synthesizeSpeech(req.body);
+      recordVoiceRequest(ip);
+      res.json(result);
     } catch (error) {
       next(error);
     }
@@ -229,7 +328,25 @@ export function createApp() {
 
   app.post('/api/telephony/outbound-demo', async (req, res, next) => {
     try {
+      const phone = normalizeDemoPhone(req.body?.to);
+      if (!phone) {
+        res.status(400).json({ error: 'A valid destination phone number is required' });
+        return;
+      }
+
+      const forwarded = req.headers['x-forwarded-for'];
+      const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim() || req.ip || 'unknown';
+
+      const verdict = checkCallRateLimit(ip, phone);
+      if (!verdict.allowed) {
+        res.status(429).json({ error: verdict.reason, retryAfterSeconds: verdict.retryAfterSeconds });
+        return;
+      }
+
       const result = await placeOutboundDemoCall(req.body);
+      if (result.mode === 'call') {
+        recordCall(ip, phone);
+      }
       res.status(result.mode === 'call' ? 201 : 200).json(result);
     } catch (error) {
       next(error);

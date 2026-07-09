@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       host: "0.0.0.0",
+      watch: {
+        ignored: ["**/tmp/**", "**/server/data/**", "**/*.sqlite*", "**/dev-run.*.log", "**/.tools/**"]
+      },
       proxy: {
         "/api": backendBaseUrl
       }

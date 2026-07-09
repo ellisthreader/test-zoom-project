@@ -1,0 +1,23 @@
+node:internal/fs/watchers:321
+    const error = new UVException({
+                  ^
+
+Error: EBUSY: resource busy or locked, watch 'C:\Users\Ellis\Desktop\test zoom project\public\voice-orb-demo-loop.mp4'
+[90m    at FSWatcher.<computed> (node:internal/fs/watchers:321:19)[39m
+[90m    at Object.watch (node:fs:2548:36)[39m
+    at createFsWatchInstance [90m(file:///C:/Users/Ellis/Desktop/test%20zoom%20project/[39mnode_modules/[4mvite[24m/dist/node/chunks/dep-BK3b2jBa.js:42780:17[90m)[39m
+    at setFsWatchListener [90m(file:///C:/Users/Ellis/Desktop/test%20zoom%20project/[39mnode_modules/[4mvite[24m/dist/node/chunks/dep-BK3b2jBa.js:42827:15[90m)[39m
+    at NodeFsHandler._watchWithNodeFs [90m(file:///C:/Users/Ellis/Desktop/test%20zoom%20project/[39mnode_modules/[4mvite[24m/dist/node/chunks/dep-BK3b2jBa.js:42982:14[90m)[39m
+    at NodeFsHandler._handleFile [90m(file:///C:/Users/Ellis/Desktop/test%20zoom%20project/[39mnode_modules/[4mvite[24m/dist/node/chunks/dep-BK3b2jBa.js:43046:23[90m)[39m
+    at NodeFsHandler._addToNodeFs [90m(file:///C:/Users/Ellis/Desktop/test%20zoom%20project/[39mnode_modules/[4mvite[24m/dist/node/chunks/dep-BK3b2jBa.js:43288:21[90m)[39m
+Emitted 'error' event on FSWatcher instance at:
+    at FSWatcher._handleError [90m(file:///C:/Users/Ellis/Desktop/test%20zoom%20project/[39mnode_modules/[4mvite[24m/dist/node/chunks/dep-BK3b2jBa.js:44481:10[90m)[39m
+    at NodeFsHandler._addToNodeFs [90m(file:///C:/Users/Ellis/Desktop/test%20zoom%20project/[39mnode_modules/[4mvite[24m/dist/node/chunks/dep-BK3b2jBa.js:43296:18[90m)[39m {
+  errno: [33m-4082[39m,
+  syscall: [32m'watch'[39m,
+  code: [32m'EBUSY'[39m,
+  path: [32m'C:\\Users\\Ellis\\Desktop\\test zoom project\\public\\voice-orb-demo-loop.mp4'[39m,
+  filename: [32m'C:\\Users\\Ellis\\Desktop\\test zoom project\\public\\voice-orb-demo-loop.mp4'[39m
+}
+
+Node.js v24.18.0

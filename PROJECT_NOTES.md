@@ -94,3 +94,14 @@ The project should emphasize:
 Use `DEMO_RUNBOOK.md` as the RelayClarity product walkthrough script. It explains how to present the software workflow clearly section by section.
 
 Use `IMPLEMENTATION_PLAN.md` as the product build scorecard. It records the brand direction, current software workflow, next production-grade expansion, and known limits.
+
+## UI Pattern Note: Good Integrations Parallax
+
+The `/integrations` hero logo cloud is a good example of restrained parallax scrolling for this project.
+
+- Keep the starting state simple and readable: light background, centered headline, compact logo cloud.
+- Use real integration logos as the visual content instead of generated background art.
+- Drive movement with Framer Motion `useScroll` and `useTransform`, scoped to the hero section.
+- Animate individual logo tiles subtly: spread outward/down, rotate slightly, sharpen blur, and lift the overall cloud.
+- Preserve reduced-motion behavior by disabling scroll transforms when `useReducedMotion()` is true.
+- Avoid decorative noise; the movement should reveal the breadth of integrations without making the hero feel busy.

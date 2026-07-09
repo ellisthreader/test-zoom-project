@@ -1,0 +1,95 @@
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[2m10:07:00[22m [31m[1m[vite][22m[39m Pre-transform error: C:\Users\Ellis\Desktop\test zoom project\src\main.tsx: Expected corresponding JSX closing tag for <main>. (6109:18)
+
+[0m [90m 6107 |[39m         [33m<[39m[33mPlatformParallaxSection[39m [33m/[39m[33m>[39m
+ [90m 6108 |[39m                     [33mMeet[39m [33m<[39m[33mem[39m[33m>[39m[33mClara[39m[33m<[39m[33m/[39m[33mem[39m[33m>[39m — your [33mAI[39m agent[33m,[39m live [36min[39m days[33m.[39m
+[31m[1m>[22m[39m[90m 6109 |[39m                   [33m<[39m[33m/[39m[33mmotion[39m[33m.[39mp[33m>[39m
+ [90m      |[39m                   [31m[1m^[22m[39m
+ [90m 6110 |[39m                 [33m<[39m[33m/[39m[33mmotion[39m[33m.[39mdiv[33m>[39m
+ [90m 6111 |[39m               [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 6112 |[39m[0m
+[2m10:07:00[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\Ellis\Desktop\test zoom project\src\main.tsx: Expected corresponding JSX closing tag for <main>. (6109:18)
+
+[0m [90m 6107 |[31m         [33m<[31m[33mPlatformParallaxSection[31m [33m/[31m[33m>[31m
+ [90m 6108 |[31m                     [33mMeet[31m [33m<[31m[33mem[31m[33m>[31m[33mClara[31m[33m<[31m[33m/[31m[33mem[31m[33m>[31m — your [33mAI[31m agent[33m,[31m live [36min[31m days[33m.[31m
+[31m[1m>[22m[31m[90m 6109 |[31m                   [33m<[31m[33m/[31m[33mmotion[31m[33m.[31mp[33m>[31m
+ [90m      |[31m                   [31m[1m^[22m[31m
+ [90m 6110 |[31m                 [33m<[31m[33m/[31m[33mmotion[31m[33m.[31mdiv[33m>[31m
+ [90m 6111 |[31m               [33m<[31m[33m/[31m[33mdiv[31m[33m>[31m
+ [90m 6112 |[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/Ellis/Desktop/test zoom project/src/main.tsx[39m:6109:18
+[33m  6227|                        </label>
+  6228|  
+  6229|                        <div className="demo-phone-field is-wide">
+     |                                  ^
+  6230|                          <span>Phone number</span>
+  6231|                          <div className="demo-phone-row">[39m
+      at constructor (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:365:19)
+      at TypeScriptParserMixin.raise (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:6616:19)
+      at TypeScriptParserMixin.jsxParseElementAt (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:4739:16)
+      at TypeScriptParserMixin.jsxParseElementAt (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:4710:32)
+      at TypeScriptParserMixin.jsxParseElement (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:4761:17)
+      at TypeScriptParserMixin.parseExprAtom (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:4771:19)
+      at TypeScriptParserMixin.parseExprSubscripts (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11098:23)
+      at TypeScriptParserMixin.parseUpdate (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11083:21)
+      at TypeScriptParserMixin.parseMaybeUnary (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11063:23)
+      at TypeScriptParserMixin.parseMaybeUnary (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:9854:18)
+      at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10916:61)
+      at TypeScriptParserMixin.parseExprOps (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10921:23)
+      at TypeScriptParserMixin.parseMaybeConditional (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10898:23)
+      at TypeScriptParserMixin.parseMaybeAssign (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10848:21)
+      at C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:9792:39
+      at TypeScriptParserMixin.tryParse (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:6924:20)
+      at TypeScriptParserMixin.parseMaybeAssign (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:9792:18)
+      at C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10817:39
+      at TypeScriptParserMixin.allowInAnd (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12443:12)
+      at TypeScriptParserMixin.parseMaybeAssignAllowIn (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10817:17)
+      at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12510:17)
+      at TypeScriptParserMixin.parseParenAndDistinguishExpression (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11692:28)
+      at TypeScriptParserMixin.parseExprAtom (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11348:23)
+      at TypeScriptParserMixin.parseExprAtom (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:4776:20)
+      at TypeScriptParserMixin.parseExprSubscripts (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11098:23)
+      at TypeScriptParserMixin.parseUpdate (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11083:21)
+      at TypeScriptParserMixin.parseMaybeUnary (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:11063:23)
+      at TypeScriptParserMixin.parseMaybeUnary (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:9854:18)
+      at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10916:61)
+      at TypeScriptParserMixin.parseExprOps (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10921:23)
+      at TypeScriptParserMixin.parseMaybeConditional (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10898:23)
+      at TypeScriptParserMixin.parseMaybeAssign (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10848:21)
+      at TypeScriptParserMixin.parseMaybeAssign (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:9803:20)
+      at TypeScriptParserMixin.parseExpressionBase (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10801:23)
+      at C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10797:39
+      at TypeScriptParserMixin.allowInAnd (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12438:16)
+      at TypeScriptParserMixin.parseExpression (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:10797:17)
+      at TypeScriptParserMixin.parseReturnStatement (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:13159:28)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12815:21)
+      at TypeScriptParserMixin.parseStatementContent (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:9525:18)
+      at TypeScriptParserMixin.parseStatementLike (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12784:17)
+      at TypeScriptParserMixin.parseStatementListItem (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12764:17)
+      at TypeScriptParserMixin.parseBlockOrModuleBlockBody (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:13333:61)
+      at TypeScriptParserMixin.parseBlockBody (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:13326:10)
+      at TypeScriptParserMixin.parseBlock (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:13314:10)
+      at TypeScriptParserMixin.parseFunctionBody (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12117:24)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12103:10)
+      at TypeScriptParserMixin.parseFunctionBodyAndFinish (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:9189:18)
+      at C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:13462:12
+      at TypeScriptParserMixin.withSmartMixTopicForbiddingContext (C:\Users\Ellis\Desktop\test zoom project\node_modules\@babel\parser\lib\index.js:12420:14)
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of C:\Users\Ellis\Desktop\test zoom project\src\main.tsx as it exceeds the max of 500KB.

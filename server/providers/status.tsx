@@ -1,4 +1,5 @@
 import { config, hasElevenLabs, hasOpenAI, hasOutboundTelephony, hasZoomWebhookSecret } from '../config.js';
+import { getKnowledgeBaseSource } from '../adapters/kb.js';
 
 export function getProviderStatus() {
   return {
@@ -31,7 +32,7 @@ export function getProviderStatus() {
     adapters: {
       crm: 'mock_json',
       helpdesk: 'in_memory',
-      knowledgeBase: 'local_json',
+      knowledgeBase: getKnowledgeBaseSource(),
     },
   };
 }

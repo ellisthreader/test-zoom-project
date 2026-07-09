@@ -1,0 +1,5 @@
+
+> relayclarity-deployment-platform@1.0.0 server
+> tsx server/start.tsx
+
+RelayClarity AI backend running on http://127.0.0.1:8790

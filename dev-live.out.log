@@ -1,0 +1,13 @@
+
+> relayclarity-deployment-platform@1.0.0 dev
+> node scripts/dev.mjs
+
+
+> relayclarity-deployment-platform@1.0.0 server
+> tsx server/start.tsx
+
+
+> relayclarity-deployment-platform@1.0.0 client
+> vite --host 0.0.0.0 --strictPort
+
+RelayClarity AI backend running on http://127.0.0.1:8787

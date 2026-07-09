@@ -9,25 +9,18 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import relayclarityLogoUrl from "../../assets/relayclarity-logo.svg";
+import logoLightUrl from "../../assets/relayclarity-logo.svg";
+import logoDarkUrl from "../../assets/relayclarity-logo-dark.svg";
 
 const colors = {
   ink: "#0f172a",
-  slate: "#334155",
+  slate: "#475569",
   muted: "#64748b",
-  line: "#d8e0ea",
-  surface: "#ffffff",
-  soft: "#f6f8fb",
+  line: "#e2e8f0",
   blue: "#2563eb",
   blueDark: "#1d4ed8",
   teal: "#0f766e",
-  tealSoft: "#ccfbf1",
-  amber: "#b45309",
-  amberSoft: "#ffedd5",
-  red: "#b91c1c",
-  redSoft: "#fee2e2",
-  green: "#15803d",
-  greenSoft: "#dcfce7",
+  tealBright: "#2dd4bf",
 };
 
 const ease = Easing.bezier(0.22, 1, 0.36, 1);
@@ -37,7 +30,7 @@ const base: React.CSSProperties = {
     "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 };
 
-const useProgress = (start = 0, duration = 34) => {
+const useProgress = (start = 0, duration = 30) => {
   const frame = useCurrentFrame();
   return interpolate(frame, [start, start + duration], [0, 1], {
     extrapolateLeft: "clamp",
@@ -52,22 +45,34 @@ const useSpringIn = (delay = 0) => {
   return spring({
     frame: frame - delay,
     fps,
-    config: { damping: 19, stiffness: 112, mass: 0.82 },
+    config: { damping: 200, stiffness: 110, mass: 0.9 },
+  });
+};
+
+/** Spring with a little overshoot — for numbers and avatars that should "pop". */
+const usePop = (delay = 0) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  return spring({
+    frame: frame - delay,
+    fps,
+    config: { damping: 13, stiffness: 140, mass: 0.7 },
   });
 };
 
 const Reveal: React.FC<{
   delay?: number;
+  from?: number;
   children: React.ReactNode;
   style?: React.CSSProperties;
-}> = ({ delay = 0, children, style }) => {
+}> = ({ delay = 0, from = 44, children, style }) => {
   const progress = useSpringIn(delay);
-
   return (
     <div
       style={{
         opacity: progress,
-        transform: `translateY(${interpolate(progress, [0, 1], [34, 0])}px)`,
+        transform: `translateY(${interpolate(progress, [0, 1], [from, 0])}px)`,
+        filter: `blur(${interpolate(progress, [0, 0.75, 1], [12, 1, 0])}px)`,
         ...style,
       }}
     >
@@ -76,127 +81,197 @@ const Reveal: React.FC<{
   );
 };
 
-const Scene: React.FC<{ children: React.ReactNode; dark?: boolean }> = ({ children, dark = false }) => (
-  <AbsoluteFill
-    style={{
-      ...base,
-      overflow: "hidden",
-      color: dark ? "#ffffff" : colors.ink,
-      background: dark
-        ? "linear-gradient(135deg, #07111f 0%, #0f172a 52%, #08302d 100%)"
-        : "linear-gradient(135deg, #ffffff 0%, #f6f8fb 46%, #edf7f6 100%)",
-    }}
-  >
+/** Springy slide-in from the right, used for the big product panels. */
+const SlideIn: React.FC<{
+  delay?: number;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}> = ({ delay = 0, children, style }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const progress = spring({
+    frame: frame - delay,
+    fps,
+    config: { damping: 22, stiffness: 80, mass: 1 },
+  });
+  return (
     <div
       style={{
-        position: "absolute",
-        inset: 0,
-        opacity: dark ? 0.14 : 0.36,
-        backgroundImage:
-          "linear-gradient(rgba(37,99,235,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(15,118,110,.14) 1px, transparent 1px)",
-        backgroundSize: "88px 88px",
+        opacity: interpolate(progress, [0, 0.5], [0, 1], {
+          extrapolateRight: "clamp",
+        }),
+        transform: `translateX(${interpolate(progress, [0, 1], [110, 0])}px) scale(${interpolate(
+          progress,
+          [0, 1],
+          [0.965, 1],
+        )})`,
+        ...style,
       }}
-    />
-    <div
+    >
+      {children}
+    </div>
+  );
+};
+
+/**
+ * Scene shell: slow cinematic push-in across its whole duration, a fast fade
+ * up at the start and a dip-to-dark at the end so cuts breathe. Dark scenes
+ * get softly drifting light particles.
+ */
+const Scene: React.FC<{
+  children: React.ReactNode;
+  dark?: boolean;
+  duration?: number;
+}> = ({ children, dark = false, duration = 150 }) => {
+  const frame = useCurrentFrame();
+  const fadeIn = interpolate(frame, [0, 12], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  });
+  const fadeOut = interpolate(frame, [duration - 12, duration - 1], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const zoom = interpolate(frame, [0, duration], [1, 1.045]);
+  return (
+    <AbsoluteFill
       style={{
-        position: "absolute",
-        top: 72,
-        right: -180,
-        width: 620,
-        height: 620,
-        borderRadius: 620,
-        background: dark ? "rgba(45,212,191,.18)" : "rgba(37,99,235,.12)",
-        filter: "blur(10px)",
+        ...base,
+        overflow: "hidden",
+        opacity: fadeIn * fadeOut,
+        transform: `scale(${zoom})`,
+        color: dark ? "#ffffff" : colors.ink,
+        background: dark
+          ? "radial-gradient(1300px 860px at 76% 16%, rgba(37,99,235,.26), transparent 60%), radial-gradient(1100px 760px at 10% 92%, rgba(15,118,110,.28), transparent 60%), linear-gradient(150deg, #050d1c 0%, #0b1526 55%, #071f1d 100%)"
+          : "radial-gradient(1100px 720px at 84% 8%, rgba(37,99,235,.08), transparent 58%), radial-gradient(900px 680px at 4% 98%, rgba(15,118,110,.08), transparent 55%), linear-gradient(150deg, #ffffff 0%, #f7fafc 60%, #f0f8f7 100%)",
       }}
-    />
-    <div
-      style={{
-        position: "absolute",
-        bottom: -270,
-        left: -200,
-        width: 620,
-        height: 620,
-        borderRadius: 620,
-        background: dark ? "rgba(37,99,235,.18)" : "rgba(15,118,110,.13)",
-        filter: "blur(12px)",
-      }}
-    />
-    {children}
-  </AbsoluteFill>
-);
+    >
+      {dark &&
+        Array.from({ length: 16 }).map((_, i) => {
+          const x = (i * 137.5) % 100;
+          const y = (i * 71.3) % 100;
+          const drift = Math.sin(frame / (34 + (i % 5) * 7) + i * 1.7);
+          const size = 4 + (i % 3) * 3;
+          return (
+            <span
+              key={i}
+              style={{
+                position: "absolute",
+                left: `${x}%`,
+                top: `${y + drift * 3}%`,
+                width: size,
+                height: size,
+                borderRadius: size,
+                background: i % 2 ? "rgba(45,212,191,.5)" : "rgba(96,165,250,.45)",
+                opacity: 0.08 + 0.1 * (i % 3),
+                filter: "blur(1px)",
+              }}
+            />
+          );
+        })}
+      {children}
+    </AbsoluteFill>
+  );
+};
 
 const Brand: React.FC<{ dark?: boolean }> = ({ dark = false }) => (
-  <div
-    style={{
-      position: "absolute",
-      top: 58,
-      left: 78,
-      width: 318,
-      height: 62,
-      borderRadius: 8,
-      display: "flex",
-      alignItems: "center",
-      padding: dark ? "0 18px" : 0,
-      background: dark ? "rgba(255,255,255,.96)" : "transparent",
-      boxShadow: dark ? "0 18px 48px rgba(0,0,0,.18)" : "none",
-    }}
-  >
-    <Img src={relayclarityLogoUrl} style={{ width: "100%", height: "auto" }} />
-  </div>
+  <Reveal delay={4} from={-18} style={{ position: "absolute", top: 60, left: 84, width: 296 }}>
+    <Img
+      src={dark ? logoDarkUrl : logoLightUrl}
+      style={{ width: "100%", height: "auto" }}
+    />
+  </Reveal>
 );
 
-const Kicker: React.FC<{ children: React.ReactNode; dark?: boolean }> = ({ children, dark = false }) => (
-  <div
-    style={{
-      width: "fit-content",
-      borderRadius: 999,
-      border: `1px solid ${dark ? "rgba(255,255,255,.24)" : "rgba(37,99,235,.2)"}`,
-      background: dark ? "rgba(255,255,255,.09)" : "rgba(255,255,255,.82)",
-      color: dark ? "#99f6e4" : colors.teal,
-      padding: "11px 18px",
-      fontSize: 22,
-      fontWeight: 900,
-      lineHeight: 1,
-    }}
-  >
-    {children}
-  </div>
-);
-
-const Title: React.FC<{ children: React.ReactNode; dark?: boolean; max?: number; size?: number }> = ({
+const Kicker: React.FC<{ children: React.ReactNode; dark?: boolean }> = ({
   children,
   dark = false,
-  max = 880,
-  size = 90,
-}) => (
+}) => {
+  const grow = useProgress(6, 26);
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 12,
+        color: dark ? "#5eead4" : colors.teal,
+        fontSize: 23,
+        fontWeight: 800,
+        letterSpacing: 5,
+        textTransform: "uppercase",
+        lineHeight: 1,
+      }}
+    >
+      <span
+        style={{
+          width: 34 * grow,
+          height: 3,
+          borderRadius: 3,
+          background: dark ? colors.tealBright : colors.blue,
+        }}
+      />
+      {children}
+    </div>
+  );
+};
+
+const Title: React.FC<{
+  children: React.ReactNode;
+  dark?: boolean;
+  max?: number;
+  size?: number;
+  center?: boolean;
+}> = ({ children, dark = false, max = 900, size = 100, center = false }) => (
   <h1
     style={{
-      margin: "26px 0 0",
+      margin: "30px 0 0",
       maxWidth: max,
+      marginLeft: center ? "auto" : undefined,
+      marginRight: center ? "auto" : undefined,
       color: dark ? "#ffffff" : colors.ink,
       fontSize: size,
-      lineHeight: 0.94,
-      fontWeight: 880,
-      letterSpacing: 0,
+      lineHeight: 1.02,
+      fontWeight: 850,
+      letterSpacing: -2.5,
     }}
   >
     {children}
   </h1>
 );
 
+const Accent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const frame = useCurrentFrame();
+  const shift = (frame * 0.9) % 200;
+  return (
+    <span
+      style={{
+        backgroundImage: `linear-gradient(110deg, ${colors.blue}, ${colors.tealBright}, ${colors.blue})`,
+        backgroundSize: "220% 100%",
+        backgroundPosition: `${shift}% 50%`,
+        WebkitBackgroundClip: "text",
+        backgroundClip: "text",
+        color: "transparent",
+      }}
+    >
+      {children}
+    </span>
+  );
+};
+
 const Copy: React.FC<{ children: React.ReactNode; dark?: boolean; max?: number }> = ({
   children,
   dark = false,
-  max = 760,
+  max = 700,
 }) => (
   <p
     style={{
       margin: "28px 0 0",
       maxWidth: max,
-      color: dark ? "#dbeafe" : colors.slate,
-      fontSize: 34,
-      lineHeight: 1.25,
-      fontWeight: 650,
+      color: dark ? "#b6c6e3" : colors.slate,
+      fontSize: 32,
+      lineHeight: 1.36,
+      fontWeight: 550,
     }}
   >
     {children}
@@ -210,11 +285,12 @@ const Panel: React.FC<{
 }> = ({ children, style, dark = false }) => (
   <div
     style={{
-      borderRadius: 10,
-      border: `1px solid ${dark ? "rgba(255,255,255,.16)" : "rgba(216,224,234,.95)"}`,
-      background: dark ? "rgba(15,23,42,.78)" : "rgba(255,255,255,.94)",
-      boxShadow: dark ? "0 34px 100px rgba(0,0,0,.34)" : "0 34px 100px rgba(15,23,42,.14)",
-      backdropFilter: "blur(10px)",
+      borderRadius: 24,
+      border: `1px solid ${dark ? "rgba(255,255,255,.12)" : "rgba(226,232,240,.9)"}`,
+      background: dark ? "rgba(10,18,34,.78)" : "rgba(255,255,255,.97)",
+      boxShadow: dark
+        ? "0 50px 130px rgba(0,0,0,.44)"
+        : "0 50px 130px rgba(15,23,42,.13)",
       ...style,
     }}
   >
@@ -222,594 +298,197 @@ const Panel: React.FC<{
   </div>
 );
 
-const Pill: React.FC<{ children: React.ReactNode; tone?: "blue" | "teal" | "green" | "amber" | "red" }> = ({
-  children,
-  tone = "blue",
-}) => {
-  const map = {
-    blue: [colors.blue, "#dbeafe"],
-    teal: [colors.teal, colors.tealSoft],
-    green: [colors.green, colors.greenSoft],
-    amber: [colors.amber, colors.amberSoft],
-    red: [colors.red, colors.redSoft],
-  }[tone];
-
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        minHeight: 38,
-        borderRadius: 999,
-        padding: "0 14px",
-        background: map[1],
-        color: map[0],
-        fontSize: 18,
-        fontWeight: 900,
-      }}
-    >
-      {children}
-    </span>
-  );
-};
-
-const BrowserBar = () => (
+const ClaraAvatar: React.FC<{ size?: number }> = ({ size = 52 }) => (
   <div
     style={{
-      height: 44,
-      borderBottom: `1px solid ${colors.line}`,
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "0 18px",
-      background: "#ffffff",
+      width: size,
+      height: size,
+      borderRadius: 999,
+      flexShrink: 0,
+      display: "grid",
+      placeItems: "center",
+      background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+      color: "#ffffff",
+      fontSize: size * 0.44,
+      fontWeight: 850,
+      boxShadow: "0 12px 30px rgba(37,99,235,.35)",
     }}
   >
-    {[colors.blue, "#cbd5e1", "#cbd5e1"].map((color, index) => (
-      <span key={index} style={{ width: 10, height: 10, borderRadius: 20, background: color }} />
-    ))}
-    <span
-      style={{
-        marginLeft: 16,
-        height: 22,
-        width: 230,
-        borderRadius: 999,
-        background: "#eef2f7",
-      }}
-    />
+    C
   </div>
 );
 
-const Metric: React.FC<{ value: string; label: string; tone?: "blue" | "teal" | "green" }> = ({
-  value,
-  label,
-  tone = "blue",
-}) => {
-  const accent = tone === "green" ? colors.green : tone === "teal" ? colors.teal : colors.blue;
-
-  return (
-    <div
-      style={{
-        borderRadius: 8,
-        border: `1px solid ${colors.line}`,
-        background: "#ffffff",
-        padding: "20px 22px",
-      }}
-    >
-      <strong style={{ display: "block", color: accent, fontSize: 42, lineHeight: 1, fontWeight: 880 }}>{value}</strong>
-      <span style={{ display: "block", marginTop: 9, color: colors.muted, fontSize: 18, fontWeight: 800 }}>{label}</span>
-    </div>
-  );
-};
-
-const ProductDashboard: React.FC = () => {
-  const chart = useProgress(38, 60);
-  const handoff = useProgress(70, 45);
-
-  return (
-    <Panel style={{ position: "absolute", right: 86, top: 170, width: 890, overflow: "hidden" }}>
-      <BrowserBar />
-      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", minHeight: 630 }}>
-        <div style={{ borderRight: `1px solid ${colors.line}`, background: "#f8fafc", padding: 26 }}>
-          <strong style={{ display: "block", color: colors.ink, fontSize: 25 }}>Launch desk</strong>
-          {["Agent brief", "Simulations", "Guardrails", "Live monitor"].map((item, index) => (
-            <div
-              key={item}
-              style={{
-                marginTop: index === 0 ? 28 : 12,
-                borderRadius: 8,
-                padding: "15px 14px",
-                background: index === 1 ? "#dbeafe" : "transparent",
-                color: index === 1 ? colors.blueDark : colors.slate,
-                fontSize: 18,
-                fontWeight: 850,
-              }}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: 30 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-            <div>
-              <Pill tone="green">Ready to pilot</Pill>
-              <h2 style={{ margin: "16px 0 0", color: colors.ink, fontSize: 44, lineHeight: 1, fontWeight: 880 }}>
-                Northstar Dental agent
-              </h2>
-            </div>
-            <Pill tone="teal">Voice + chat</Pill>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 28 }}>
-            <Metric value="94%" label="answer confidence" />
-            <Metric value="18s" label="median intake" tone="teal" />
-            <Metric value="7" label="handoff rules" tone="green" />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 18, marginTop: 22 }}>
-            <div style={{ borderRadius: 8, border: `1px solid ${colors.line}`, padding: 22, background: "#ffffff" }}>
-              <strong style={{ color: colors.ink, fontSize: 24 }}>Simulation results</strong>
-              {[
-                ["Appointment booking", 0.94, colors.green],
-                ["Price question", 0.86, colors.teal],
-                ["Emergency symptom", 0.72, colors.amber],
-                ["Prompt injection", 0.98, colors.blue],
-              ].map(([label, value, color], index) => (
-                <div key={label as string} style={{ marginTop: 22 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", color: colors.slate, fontSize: 18, fontWeight: 800 }}>
-                    <span>{label}</span>
-                    <span>{Math.round((value as number) * 100)}%</span>
-                  </div>
-                  <div style={{ marginTop: 9, height: 10, borderRadius: 20, background: "#e2e8f0", overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${interpolate(chart, [0, 1], [8, (value as number) * 100])}%`,
-                        height: "100%",
-                        borderRadius: 20,
-                        background: color as string,
-                        transition: "width .2s",
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ borderRadius: 8, border: `1px solid ${colors.line}`, padding: 22, background: "#ffffff" }}>
-              <strong style={{ color: colors.ink, fontSize: 24 }}>Live handoff preview</strong>
-              <div
-                style={{
-                  marginTop: 18,
-                  borderRadius: 8,
-                  background: "#f8fafc",
-                  padding: 18,
-                  opacity: handoff,
-                  transform: `translateY(${interpolate(handoff, [0, 1], [22, 0])}px)`,
-                }}
-              >
-                <Pill tone="amber">Reception callback</Pill>
-                <p style={{ margin: "15px 0 0", color: colors.slate, fontSize: 22, lineHeight: 1.26, fontWeight: 740 }}>
-                  Caller needs an urgent appointment, verified contact details, and prefers this afternoon.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Panel>
-  );
-};
-
-const StepRail: React.FC<{ active: number; dark?: boolean; compact?: boolean }> = ({
-  active,
-  dark = false,
-  compact = false,
+const PersonAvatar: React.FC<{ initials: string; hue: string; size?: number }> = ({
+  initials,
+  hue,
+  size = 48,
 }) => (
-  <div style={{ display: "grid", gap: compact ? 8 : 12 }}>
-    {["Configure", "Simulate", "Control", "Monitor", "Launch"].map((item, index) => (
-      <div
-        key={item}
-        style={{
-          display: "grid",
-          gridTemplateColumns: `${compact ? 34 : 42}px 1fr`,
-          alignItems: "center",
-          gap: compact ? 10 : 12,
-          color: dark ? (index <= active ? "#ffffff" : "#94a3b8") : index <= active ? colors.ink : colors.muted,
-          fontSize: compact ? 20 : 24,
-          fontWeight: 880,
-        }}
-      >
-        <span
-          style={{
-            width: compact ? 34 : 42,
-            height: compact ? 34 : 42,
-            borderRadius: compact ? 34 : 42,
-            display: "grid",
-            placeItems: "center",
-            background: index < active ? colors.teal : index === active ? colors.blue : dark ? "rgba(255,255,255,.16)" : "#e2e8f0",
-            color: index <= active || dark ? "#ffffff" : colors.muted,
-            fontSize: compact ? 15 : 18,
-            fontWeight: 950,
-          }}
-        >
-          {index < active ? "OK" : index + 1}
-        </span>
-        <span>{item}</span>
-      </div>
-    ))}
+  <div
+    style={{
+      width: size,
+      height: size,
+      borderRadius: 999,
+      flexShrink: 0,
+      display: "grid",
+      placeItems: "center",
+      background: hue,
+      color: "#ffffff",
+      fontSize: size * 0.36,
+      fontWeight: 800,
+      letterSpacing: 0.5,
+    }}
+  >
+    {initials}
   </div>
 );
 
-const FormRow: React.FC<{ label: string; value: string; delay: number; wide?: boolean }> = ({
-  label,
-  value,
-  delay,
-  wide = false,
-}) => {
-  const progress = useProgress(delay, 28);
-
+const Waveform: React.FC<{
+  bars?: number;
+  height?: number;
+  color?: string;
+  active?: number;
+}> = ({ bars = 40, height = 80, color = colors.tealBright, active = 1 }) => {
+  const frame = useCurrentFrame();
   return (
-    <div
-      style={{
-        gridColumn: wide ? "1 / -1" : undefined,
-        opacity: progress,
-        transform: `translateY(${interpolate(progress, [0, 1], [22, 0])}px)`,
-      }}
-    >
-      <span style={{ color: colors.muted, fontSize: 17, fontWeight: 850 }}>{label}</span>
-      <div
-        style={{
-          marginTop: 8,
-          borderRadius: 8,
-          border: `1px solid ${colors.line}`,
-          background: "#ffffff",
-          padding: "18px 20px",
-          color: colors.ink,
-          fontSize: 24,
-          lineHeight: 1.2,
-          fontWeight: 780,
-        }}
-      >
-        {value}
-      </div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, height }}>
+      {Array.from({ length: bars }).map((_, i) => {
+        const wave =
+          Math.sin(frame / 3.1 + i * 0.9) * 0.5 +
+          Math.sin(frame / 5.7 + i * 1.7) * 0.35 +
+          0.5;
+        const h = Math.max(0.1, Math.min(1, wave)) * height * active + 8;
+        return (
+          <span
+            key={i}
+            style={{
+              width: 7,
+              height: h,
+              borderRadius: 7,
+              background: color,
+              opacity: 0.35 + Math.min(1, wave) * 0.65,
+            }}
+          />
+        );
+      })}
     </div>
   );
 };
 
-const SceneOpen = () => (
-  <Scene dark>
-    <Brand dark />
-    <div style={{ position: "absolute", left: 96, top: 238 }}>
-      <Reveal delay={6}>
-        <Kicker dark>AI voice agent deployment</Kicker>
-        <Title dark max={780} size={96}>
-          Show customers what your agent can do before it goes live.
-        </Title>
-        <Copy dark max={720}>
-          RelayClarity turns setup, testing, guardrails, and handoffs into one visible launch process.
-        </Copy>
-      </Reveal>
-    </div>
-    <ProductDashboard />
-  </Scene>
-);
-
-const SceneConfigure = () => (
-  <Scene>
-    <Brand />
-    <div style={{ position: "absolute", left: 96, top: 218, width: 640 }}>
-      <Reveal delay={6}>
-        <Kicker>1. Configure</Kicker>
-        <Title max={680}>Build an agent from real business context.</Title>
-        <Copy>
-          Capture services, policies, escalation rules, and the customer moments your team handles every day.
-        </Copy>
-      </Reveal>
-      <Reveal delay={52} style={{ marginTop: 46 }}>
-        <StepRail active={0} />
-      </Reveal>
-    </div>
-    <Panel style={{ position: "absolute", right: 110, top: 190, width: 780, padding: 34 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <strong style={{ color: colors.ink, fontSize: 32 }}>Agent brief</strong>
-        <Pill tone="blue">Draft saved</Pill>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 30 }}>
-        <FormRow label="Business type" value="Dental practice" delay={24} />
-        <FormRow label="High-volume request" value="Book or move appointments" delay={36} />
-        <FormRow label="Approved answer source" value="Reception FAQ and pricing notes" delay={48} wide />
-        <FormRow label="Sensitive moments" value="Pain, complaints, privacy questions" delay={60} wide />
-      </div>
-      <div style={{ marginTop: 26, borderRadius: 8, background: "#eff6ff", padding: 22 }}>
-        <strong style={{ color: colors.blueDark, fontSize: 24 }}>Generated launch scope</strong>
-        <p style={{ margin: "11px 0 0", color: colors.slate, fontSize: 22, lineHeight: 1.28, fontWeight: 720 }}>
-          Answer routine questions, gather caller details, route urgent cases, and create a clear receptionist handoff.
-        </p>
-      </div>
-    </Panel>
-  </Scene>
-);
-
-const Message: React.FC<{ from: "caller" | "agent"; text: string; delay: number }> = ({ from, text, delay }) => {
-  const progress = useProgress(delay, 24);
-  const isAgent = from === "agent";
-
+const CountUp: React.FC<{
+  to: number;
+  start: number;
+  duration?: number;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
+}> = ({ to, start, duration = 44, prefix = "", suffix = "", decimals = 0 }) => {
+  const progress = useProgress(start, duration);
   return (
-    <div
-      style={{
-        justifySelf: isAgent ? "start" : "end",
-        maxWidth: 520,
-        borderRadius: 10,
-        background: isAgent ? "#f1f5f9" : colors.blue,
-        color: isAgent ? colors.ink : "#ffffff",
-        padding: "18px 22px",
-        fontSize: 24,
-        lineHeight: 1.26,
-        fontWeight: 720,
-        opacity: progress,
-        transform: `translateY(${interpolate(progress, [0, 1], [20, 0])}px)`,
-      }}
-    >
-      {text}
-    </div>
+    <>
+      {prefix}
+      {(to * progress).toFixed(decimals)}
+      {suffix}
+    </>
   );
 };
 
-const SceneSimulate = () => (
-  <Scene dark>
-    <Brand dark />
-    <div style={{ position: "absolute", left: 96, top: 218, width: 650 }}>
-      <Reveal delay={6}>
-        <Kicker dark>2. Simulate</Kicker>
-        <Title dark max={700}>Run real caller scenarios, not polished demos.</Title>
-        <Copy dark>
-          Test bookings, pricing, urgent requests, and edge cases before the first customer call.
-        </Copy>
-      </Reveal>
-      <Reveal delay={50} style={{ marginTop: 28 }}>
-        <StepRail active={1} dark compact />
-      </Reveal>
-    </div>
-    <Panel dark style={{ position: "absolute", right: 110, top: 166, width: 780, padding: 30 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <Pill tone="amber">Emergency appointment test</Pill>
-          <h2 style={{ margin: "16px 0 0", color: "#ffffff", fontSize: 38, lineHeight: 1, fontWeight: 880 }}>
-            Conversation preview
-          </h2>
-        </div>
-        <Pill tone="green">Guardrail active</Pill>
-      </div>
-      <div style={{ display: "grid", gap: 16, marginTop: 30 }}>
-        <Message from="caller" delay={25} text="I have tooth pain. Can I be seen today?" />
-        <Message from="agent" delay={48} text="I can help check availability. Is anyone in immediate danger or experiencing severe swelling?" />
-        <Message from="caller" delay={76} text="No, but I need a slot as soon as possible." />
-        <Message from="agent" delay={100} text="I will collect your contact details and mark this urgent for reception with a clear summary." />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 26 }}>
-        <Metric value="Pass" label="safe response" tone="green" />
-        <Metric value="Pass" label="identity capture" tone="teal" />
-        <Metric value="Pass" label="handoff summary" tone="blue" />
-      </div>
-    </Panel>
-  </Scene>
-);
+/* ------------------------------------------------------------------ */
+/* Scene 1 — Meet Clara                                                */
+/* ------------------------------------------------------------------ */
 
-const RuleRow: React.FC<{ label: string; detail: string; tone: "green" | "amber" | "red"; delay: number }> = ({
-  label,
-  detail,
-  tone,
-  delay,
-}) => {
-  const progress = useProgress(delay, 28);
-  const bg = tone === "green" ? colors.greenSoft : tone === "amber" ? colors.amberSoft : colors.redSoft;
-  const fg = tone === "green" ? colors.green : tone === "amber" ? colors.amber : colors.red;
-
+const SceneOpen = () => {
+  const frame = useCurrentFrame();
+  const orbit = frame * 0.9;
+  const breathe = 1 + Math.sin(frame / 7) * 0.02;
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "58px 1fr auto",
-        gap: 18,
-        alignItems: "center",
-        borderRadius: 8,
-        border: `1px solid ${colors.line}`,
-        background: "#ffffff",
-        padding: "20px 22px",
-        opacity: progress,
-        transform: `translateX(${interpolate(progress, [0, 1], [38, 0])}px)`,
-      }}
-    >
-      <span
-        style={{
-          width: 58,
-          height: 58,
-          borderRadius: 58,
-          display: "grid",
-          placeItems: "center",
-          background: bg,
-          color: fg,
-          fontSize: 20,
-          fontWeight: 950,
-        }}
-      >
-        ON
-      </span>
-      <div>
-        <strong style={{ display: "block", color: colors.ink, fontSize: 26 }}>{label}</strong>
-        <span style={{ display: "block", marginTop: 5, color: colors.muted, fontSize: 20, lineHeight: 1.24, fontWeight: 700 }}>
-          {detail}
-        </span>
-      </div>
-      <Pill tone={tone}>{tone === "green" ? "Approved" : tone === "amber" ? "Escalate" : "Block"}</Pill>
-    </div>
-  );
-};
-
-const SceneControls = () => (
-  <Scene>
-    <Brand />
-    <div style={{ position: "absolute", left: 96, top: 214, width: 660 }}>
-      <Reveal delay={6}>
-        <Kicker>3. Control</Kicker>
-        <Title max={690}>Make the boundaries explicit.</Title>
-        <Copy>
-          Approve what the agent can answer, when it should ask for a human, and what context the team receives.
-        </Copy>
-      </Reveal>
-      <Reveal delay={54} style={{ marginTop: 46 }}>
-        <StepRail active={2} />
-      </Reveal>
-    </div>
-    <div style={{ position: "absolute", right: 100, top: 190, width: 790, display: "grid", gap: 16 }}>
-      <RuleRow label="Use approved answers only" detail="Ground replies in the business FAQ, service notes, and launch brief." tone="green" delay={24} />
-      <RuleRow label="Escalate urgent or sensitive requests" detail="Pain, complaints, fraud, vulnerability, privacy, or unsafe situations go to a person." tone="amber" delay={48} />
-      <RuleRow label="Reject unsafe prompt instructions" detail="Do not expose hidden instructions, secrets, credentials, or private customer data." tone="red" delay={72} />
-      <Panel style={{ padding: 24, marginTop: 8 }}>
-        <strong style={{ color: colors.ink, fontSize: 27 }}>Human handoff payload</strong>
-        <p style={{ margin: "12px 0 0", color: colors.slate, fontSize: 22, lineHeight: 1.28, fontWeight: 720 }}>
-          Caller intent, verified contact details, urgency, transcript highlights, and recommended next action.
-        </p>
-      </Panel>
-    </div>
-  </Scene>
-);
-
-const SceneMonitor = () => {
-  const pulse = useProgress(64, 44);
-
-  return (
-    <Scene dark>
+    <Scene dark duration={150}>
       <Brand dark />
-      <div style={{ position: "absolute", left: 96, top: 224, width: 660 }}>
-        <Reveal delay={6}>
-          <Kicker dark>4. Monitor</Kicker>
-          <Title dark max={710}>See what happens once the pilot is live.</Title>
-          <Copy dark>
-            Track outcomes, missed intents, and handoff quality without waiting for customer complaints.
+      <div style={{ position: "absolute", left: 100, top: 330, width: 960 }}>
+        <Reveal delay={8}>
+          <Kicker dark>AI agent for live chat &amp; phone calls</Kicker>
+        </Reveal>
+        <Reveal delay={20}>
+          <Title dark max={900} size={148}>
+            Meet <Accent>Clara.</Accent>
+          </Title>
+        </Reveal>
+        <Reveal delay={38}>
+          <Copy dark max={680}>
+            Every chat and every call — answered in seconds, day and night.
           </Copy>
         </Reveal>
       </div>
-      <Panel dark style={{ position: "absolute", right: 104, top: 162, width: 830, padding: 30 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0, color: "#ffffff", fontSize: 38, fontWeight: 880 }}>Live operations</h2>
-          <Pill tone="green">28 calls today</Pill>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 24 }}>
-          <Metric value="81%" label="resolved automatically" tone="green" />
-          <Metric value="12" label="qualified handoffs" tone="teal" />
-          <Metric value="3" label="new intents found" tone="blue" />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 18, marginTop: 22 }}>
-          <div style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.08)", padding: 22 }}>
-            <strong style={{ color: "#ffffff", fontSize: 25 }}>Conversation stream</strong>
-            {[
-              ["Booking", "Resolved", "green"],
-              ["Pricing", "Answered", "teal"],
-              ["Complaint", "Transferred", "amber"],
-              ["Unknown policy", "Needs review", "red"],
-            ].map(([intent, state, tone], index) => (
-              <div
-                key={intent}
-                style={{
-                  marginTop: 16,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  borderRadius: 8,
-                  background: index === 3 ? `rgba(254,226,226,${0.22 + pulse * 0.18})` : "rgba(255,255,255,.08)",
-                  padding: "16px 18px",
-                  color: "#ffffff",
-                  fontSize: 22,
-                  fontWeight: 820,
-                }}
-              >
-                <span>{intent}</span>
-                <Pill tone={tone as "green" | "teal" | "amber" | "red"}>{state}</Pill>
-              </div>
-            ))}
+
+      <div
+        style={{
+          position: "absolute",
+          right: 200,
+          top: 260,
+          width: 560,
+          height: 560,
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        {[300, 420, 540].map((d, i) => (
+          <div
+            key={d}
+            style={{
+              position: "absolute",
+              width: d,
+              height: d,
+              borderRadius: d,
+              border: `1.6px solid rgba(45,212,191,${0.32 - i * 0.08})`,
+              transform: `rotate(${orbit * (i % 2 === 0 ? 1 : -0.7)}deg)`,
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: -7,
+                left: "50%",
+                width: 14,
+                height: 14,
+                borderRadius: 14,
+                background: i === 1 ? colors.blue : colors.tealBright,
+                boxShadow: `0 0 22px ${i === 1 ? colors.blue : colors.tealBright}`,
+              }}
+            />
           </div>
-          <div style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.08)", padding: 22 }}>
-            <strong style={{ color: "#ffffff", fontSize: 25 }}>Recommended action</strong>
-            <p style={{ margin: "18px 0 0", color: "#dbeafe", fontSize: 25, lineHeight: 1.25, fontWeight: 760 }}>
-              Add one answer for warranty coverage and rerun the pricing simulation.
-            </p>
-            <div style={{ marginTop: 24, height: 13, borderRadius: 40, background: "rgba(255,255,255,.16)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${interpolate(pulse, [0, 1], [18, 84])}%`, background: colors.tealSoft }} />
-            </div>
+        ))}
+        <Reveal delay={14} from={0}>
+          <div
+            style={{
+              width: 250,
+              height: 250,
+              borderRadius: 250,
+              display: "grid",
+              placeItems: "center",
+              transform: `scale(${breathe})`,
+              background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+              boxShadow: "0 0 130px rgba(37,99,235,.55), 0 0 60px rgba(45,212,191,.4)",
+              color: "#ffffff",
+              fontSize: 112,
+              fontWeight: 850,
+            }}
+          >
+            C
           </div>
+        </Reveal>
+        <div style={{ position: "absolute", bottom: -30 }}>
+          <Waveform bars={20} height={50} active={0.8} />
         </div>
-      </Panel>
+      </div>
     </Scene>
   );
 };
 
-const SceneLaunch = () => (
-  <Scene>
-    <Brand />
-    <div style={{ position: "absolute", left: 96, top: 220, width: 680 }}>
-      <Reveal delay={6}>
-        <Kicker>5. Launch</Kicker>
-        <Title max={730}>Hand over a clear launch decision.</Title>
-        <Copy>
-          Replace scattered notes with readiness, remaining risks, owners, and the exact next action.
-        </Copy>
-      </Reveal>
-      <Reveal delay={54} style={{ marginTop: 46 }}>
-        <StepRail active={4} />
-      </Reveal>
-    </div>
-    <Panel style={{ position: "absolute", right: 112, top: 178, width: 760, padding: 34 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-        <div>
-          <Pill tone="green">Ready for first calls</Pill>
-          <h2 style={{ margin: "18px 0 0", color: colors.ink, fontSize: 46, lineHeight: 1, fontWeight: 880 }}>
-            Launch summary
-          </h2>
-        </div>
-        <strong style={{ color: colors.green, fontSize: 64, lineHeight: 1, fontWeight: 900 }}>94%</strong>
-      </div>
-      {[
-        ["Coverage", "Bookings, FAQs, pricing, urgent callbacks, and reception handoffs are tested."],
-        ["Guardrails", "Sensitive requests escalate and unsafe instructions are blocked."],
-        ["Owner", "Reception lead receives all urgent handoffs with a clean summary."],
-      ].map(([label, detail], index) => {
-        const progress = useProgress(28 + index * 22, 26);
-        return (
-          <div
-            key={label}
-            style={{
-              marginTop: 20,
-              borderRadius: 8,
-              border: `1px solid ${colors.line}`,
-              background: "#ffffff",
-              padding: "19px 22px",
-              opacity: progress,
-              transform: `translateY(${interpolate(progress, [0, 1], [18, 0])}px)`,
-            }}
-          >
-            <span style={{ color: colors.teal, fontSize: 18, fontWeight: 950 }}>{label}</span>
-            <p style={{ margin: "8px 0 0", color: colors.slate, fontSize: 23, lineHeight: 1.27, fontWeight: 740 }}>{detail}</p>
-          </div>
-        );
-      })}
-      <div
-        style={{
-          marginTop: 26,
-          borderRadius: 8,
-          background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-          color: "#ffffff",
-          padding: "22px 26px",
-          fontSize: 29,
-          lineHeight: 1.1,
-          fontWeight: 900,
-        }}
-      >
-        Next step: open dashboard and run your own agent preview.
-      </div>
-    </Panel>
-  </Scene>
-);
+/* ------------------------------------------------------------------ */
+/* Scene 2 — The problem                                               */
+/* ------------------------------------------------------------------ */
 
-const SceneFinal = () => (
-  <Scene dark>
+const SceneProblem = () => (
+  <Scene dark duration={125}>
     <Brand dark />
     <div
       style={{
@@ -818,44 +497,746 @@ const SceneFinal = () => (
         display: "grid",
         placeItems: "center",
         textAlign: "center",
-        padding: 120,
+        padding: "0 160px",
       }}
     >
-      <Reveal delay={6}>
-        <Kicker dark>RelayClarity</Kicker>
-        <Title dark max={1250} size={116}>
-          Launch AI voice agents with proof customers can trust.
-        </Title>
-        <Copy dark max={900}>
-          Configure the agent. Simulate real calls. Approve the controls. Monitor every handoff.
-        </Copy>
-      </Reveal>
+      <div>
+        <Reveal delay={8}>
+          <Title dark max={1400} size={116} center>
+            Your customers <Accent>won&rsquo;t wait.</Accent>
+          </Title>
+        </Reveal>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 130,
+            marginTop: 96,
+          }}
+        >
+          {[
+            ["11 min", "average hold time", 34],
+            ["62%", "of chats abandoned", 46],
+            ["1 in 3", "leads arrive after hours", 58],
+          ].map(([value, label, delay]) => {
+            const pop = usePop(delay as number);
+            return (
+              <div
+                key={label as string}
+                style={{
+                  opacity: interpolate(pop, [0, 0.4], [0, 1], {
+                    extrapolateRight: "clamp",
+                  }),
+                  transform: `scale(${interpolate(pop, [0, 1], [0.78, 1])})`,
+                }}
+              >
+                <strong
+                  style={{
+                    display: "block",
+                    color: "#fda4af",
+                    fontSize: 96,
+                    lineHeight: 1,
+                    fontWeight: 850,
+                    letterSpacing: -3,
+                  }}
+                >
+                  {value}
+                </strong>
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 18,
+                    color: "#94a3b8",
+                    fontSize: 26,
+                    fontWeight: 650,
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   </Scene>
 );
 
+/* ------------------------------------------------------------------ */
+/* Scene 3 — Live chat                                                 */
+/* ------------------------------------------------------------------ */
+
+const TypingDots: React.FC = () => {
+  const frame = useCurrentFrame();
+  return (
+    <div
+      style={{
+        borderRadius: "6px 20px 20px 20px",
+        background: "#f1f5f9",
+        padding: "22px 26px",
+        display: "flex",
+        gap: 9,
+        alignItems: "center",
+      }}
+    >
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          style={{
+            width: 11,
+            height: 11,
+            borderRadius: 11,
+            background: "#94a3b8",
+            transform: `translateY(${Math.sin(frame / 2.6 - i * 0.9) * 4}px)`,
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const ChatBubble: React.FC<{
+  from: "customer" | "clara";
+  text: string;
+  delay: number;
+  typingFrom?: number;
+}> = ({ from, text, delay, typingFrom }) => {
+  const frame = useCurrentFrame();
+  const progress = useProgress(delay, 18);
+  const isClara = from === "clara";
+  const showTyping =
+    isClara && typingFrom !== undefined && frame >= typingFrom && frame < delay;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 16,
+        justifyContent: isClara ? "flex-start" : "flex-end",
+        alignItems: "flex-end",
+        opacity: showTyping
+          ? interpolate(frame, [typingFrom!, typingFrom! + 8], [0, 1], {
+              extrapolateRight: "clamp",
+            })
+          : progress,
+        transform: showTyping
+          ? undefined
+          : `translateY(${interpolate(progress, [0, 1], [16, 0])}px) scale(${interpolate(
+              progress,
+              [0, 1],
+              [0.96, 1],
+            )})`,
+      }}
+    >
+      {isClara && <ClaraAvatar size={48} />}
+      {showTyping ? (
+        <TypingDots />
+      ) : (
+        <div
+          style={{
+            maxWidth: 520,
+            borderRadius: isClara ? "6px 20px 20px 20px" : "20px 6px 20px 20px",
+            background: isClara
+              ? "#f1f5f9"
+              : `linear-gradient(130deg, ${colors.blue}, ${colors.blueDark})`,
+            color: isClara ? colors.ink : "#ffffff",
+            padding: "20px 24px",
+            fontSize: 25,
+            lineHeight: 1.34,
+            fontWeight: 600,
+          }}
+        >
+          {text}
+        </div>
+      )}
+      {!isClara && !showTyping && (
+        <PersonAvatar initials="SW" hue="linear-gradient(135deg, #f59e0b, #d97706)" />
+      )}
+    </div>
+  );
+};
+
+const SceneChat = () => (
+  <Scene duration={170}>
+    <Brand />
+    <div style={{ position: "absolute", left: 100, top: 330, width: 640 }}>
+      <Reveal delay={8}>
+        <Kicker>Live chat</Kicker>
+        <Title max={620} size={98}>
+          First reply in <Accent>0.8s.</Accent>
+        </Title>
+        <Copy max={560}>
+          Clara answers instantly, and turns browsing visitors into booked business.
+        </Copy>
+      </Reveal>
+    </div>
+
+    <SlideIn delay={12} style={{ position: "absolute", right: 110, top: 190, width: 740 }}>
+      <Panel style={{ overflow: "hidden" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 18,
+            padding: "24px 30px",
+            borderBottom: `1px solid ${colors.line}`,
+          }}
+        >
+          <ClaraAvatar size={54} />
+          <div style={{ flex: 1 }}>
+            <strong style={{ display: "block", color: colors.ink, fontSize: 26 }}>Clara</strong>
+            <span style={{ color: "#15803d", fontSize: 19, fontWeight: 700 }}>● Online</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <PersonAvatar initials="SW" hue="linear-gradient(135deg, #f59e0b, #d97706)" size={44} />
+            <span style={{ color: colors.muted, fontSize: 21, fontWeight: 650 }}>Sarah Whitmore</span>
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: 20, padding: 34, minHeight: 480 }}>
+          <ChatBubble from="customer" delay={24} text="Hi — how much is a check-up? Anything free this week?" />
+          <ChatBubble
+            from="clara"
+            delay={58}
+            typingFrom={34}
+            text="A check-up is £49. I have Thursday 2:15 pm or Friday 10:00 am — shall I hold one for you?"
+          />
+          <ChatBubble from="customer" delay={90} text="Thursday works. It’s Sarah — 07700 900123." />
+          <ChatBubble
+            from="clara"
+            delay={118}
+            typingFrom={98}
+            text="Booked — Thursday 2:15 pm. Confirmation is on its way. ✓"
+          />
+        </div>
+      </Panel>
+    </SlideIn>
+  </Scene>
+);
+
+/* ------------------------------------------------------------------ */
+/* Scene 4 — Phone calls                                               */
+/* ------------------------------------------------------------------ */
+
+const ScenePhone = () => {
+  const frame = useCurrentFrame();
+  const callSeconds = Math.max(0, Math.floor((frame - 14) / 30));
+  const timer = `0:${String(callSeconds).padStart(2, "0")}`;
+  const livePulse = 0.55 + 0.45 * Math.abs(Math.sin(frame / 8));
+  return (
+    <Scene dark duration={160}>
+      <Brand dark />
+      <div style={{ position: "absolute", left: 100, top: 330, width: 640 }}>
+        <Reveal delay={8}>
+          <Kicker dark>Phone calls</Kicker>
+          <Title dark max={620} size={98}>
+            Answered on the <Accent>first ring.</Accent>
+          </Title>
+          <Copy dark max={560}>
+            A natural voice, zero hold time — even at 8:47 pm on a Sunday.
+          </Copy>
+        </Reveal>
+      </div>
+
+      <SlideIn delay={12} style={{ position: "absolute", right: 110, top: 250, width: 740 }}>
+        <Panel dark style={{ padding: 40 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <ClaraAvatar size={62} />
+            <div style={{ flex: 1 }}>
+              <strong style={{ display: "block", color: "#ffffff", fontSize: 28 }}>
+                Incoming call
+              </strong>
+              <span style={{ color: "#5eead4", fontSize: 20, fontWeight: 700 }}>
+                Clara answered · {timer}
+              </span>
+            </div>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                color: "#86efac",
+                fontSize: 20,
+                fontWeight: 850,
+                letterSpacing: 2,
+              }}
+            >
+              <span
+                style={{
+                  width: 11,
+                  height: 11,
+                  borderRadius: 11,
+                  background: "#4ade80",
+                  opacity: livePulse,
+                  boxShadow: `0 0 ${10 * livePulse}px #4ade80`,
+                }}
+              />
+              LIVE
+            </span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "center", padding: "44px 0" }}>
+            <Waveform bars={42} height={110} />
+          </div>
+
+          <Reveal delay={40} from={20}>
+            <p
+              style={{
+                margin: 0,
+                color: "#e2e8f0",
+                fontSize: 27,
+                lineHeight: 1.4,
+                fontWeight: 550,
+                textAlign: "center",
+              }}
+            >
+              “Of course — I can move that to Saturday 9:30 am.
+              <br />
+              I’ve texted you the confirmation.”
+            </p>
+          </Reveal>
+        </Panel>
+      </SlideIn>
+    </Scene>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Scene 5 — Dashboard                                                 */
+/* ------------------------------------------------------------------ */
+
+const conversations = [
+  {
+    initials: "SW",
+    hue: "linear-gradient(135deg, #f59e0b, #d97706)",
+    name: "Sarah Whitmore",
+    snippet: "Check-up booked — Thursday 2:15 pm",
+    status: "Booked",
+    dot: "#15803d",
+    delay: 38,
+  },
+  {
+    initials: "JO",
+    hue: "linear-gradient(135deg, #6366f1, #4f46e5)",
+    name: "James O’Neill",
+    snippet: "Pricing question answered in chat",
+    status: "Resolved",
+    dot: "#0f766e",
+    delay: 52,
+  },
+  {
+    initials: "MK",
+    hue: "linear-gradient(135deg, #10b981, #059669)",
+    name: "Marcus Kane",
+    snippet: "Call — rescheduled to Saturday 9:30 am",
+    status: "Resolved",
+    dot: "#0f766e",
+    delay: 66,
+  },
+  {
+    initials: "PP",
+    hue: "linear-gradient(135deg, #f43f5e, #e11d48)",
+    name: "Priya Patel",
+    snippet: "Urgent request — handed to your team",
+    status: "With team",
+    dot: "#b45309",
+    delay: 80,
+  },
+];
+
+const SceneDashboard = () => (
+  <Scene duration={160}>
+    <Brand />
+    <div style={{ position: "absolute", left: 100, top: 330, width: 620 }}>
+      <Reveal delay={8}>
+        <Kicker>Dashboard</Kicker>
+        <Title max={600} size={92}>
+          Every conversation, <Accent>one view.</Accent>
+        </Title>
+        <Copy max={540}>
+          Watch Clara work in real time — and see exactly what she handled.
+        </Copy>
+      </Reveal>
+    </div>
+
+    <SlideIn delay={12} style={{ position: "absolute", right: 110, top: 180, width: 780 }}>
+      <Panel style={{ overflow: "hidden" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "26px 34px",
+            borderBottom: `1px solid ${colors.line}`,
+          }}
+        >
+          <strong style={{ color: colors.ink, fontSize: 27 }}>Live conversations</strong>
+          <span style={{ color: "#15803d", fontSize: 20, fontWeight: 750 }}>● Clara is live</span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 56,
+            padding: "26px 34px 6px",
+          }}
+        >
+          {[
+            ["28", "today", 22],
+            ["24", "handled by Clara", 30],
+            ["9", "booked", 38],
+          ].map(([value, label, delay]) => {
+            const pop = usePop(delay as number);
+            return (
+              <div
+                key={label as string}
+                style={{
+                  opacity: interpolate(pop, [0, 0.4], [0, 1], {
+                    extrapolateRight: "clamp",
+                  }),
+                  transform: `scale(${interpolate(pop, [0, 1], [0.8, 1])})`,
+                  transformOrigin: "left bottom",
+                }}
+              >
+                <strong
+                  style={{
+                    display: "block",
+                    color: colors.ink,
+                    fontSize: 44,
+                    lineHeight: 1,
+                    fontWeight: 850,
+                    letterSpacing: -1,
+                  }}
+                >
+                  {value}
+                </strong>
+                <span style={{ display: "block", marginTop: 6, color: colors.muted, fontSize: 19, fontWeight: 650 }}>
+                  {label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "grid", gap: 6, padding: "20px 16px 24px" }}>
+          {conversations.map(({ initials, hue, name, snippet, status, dot, delay }) => {
+            const progress = useProgress(delay, 22);
+            return (
+              <div
+                key={name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 20,
+                  borderRadius: 16,
+                  padding: "18px 20px",
+                  opacity: progress,
+                  transform: `translateX(${interpolate(progress, [0, 1], [46, 0])}px)`,
+                }}
+              >
+                <PersonAvatar initials={initials} hue={hue} size={52} />
+                <div style={{ flex: 1 }}>
+                  <strong style={{ display: "block", color: colors.ink, fontSize: 24 }}>{name}</strong>
+                  <span style={{ display: "block", marginTop: 4, color: colors.muted, fontSize: 20, fontWeight: 600 }}>
+                    {snippet}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 10,
+                    color: dot,
+                    fontSize: 20,
+                    fontWeight: 750,
+                  }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: 10, background: dot }} />
+                  {status}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+    </SlideIn>
+  </Scene>
+);
+
+/* ------------------------------------------------------------------ */
+/* Scene 6 — Results                                                   */
+/* ------------------------------------------------------------------ */
+
+const SceneResults = () => (
+  <Scene duration={135}>
+    <Brand />
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "grid",
+        placeItems: "center",
+        textAlign: "center",
+      }}
+    >
+      <div>
+        <Reveal delay={8}>
+          <Title max={1500} size={104} center>
+            Sell more. <Accent>Wait less.</Accent>
+          </Title>
+        </Reveal>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 140,
+            marginTop: 110,
+          }}
+        >
+          {[
+            {
+              value: <CountUp to={32} start={36} prefix="+" suffix="%" />,
+              label: "sales productivity",
+              color: colors.blue,
+              delay: 36,
+            },
+            {
+              value: <CountUp to={85} start={48} prefix="−" suffix="%" />,
+              label: "customer wait time",
+              color: colors.teal,
+              delay: 48,
+            },
+            {
+              value: "24/7",
+              label: "always available",
+              color: colors.blueDark,
+              delay: 60,
+            },
+          ].map(({ value, label, color, delay }) => {
+            const pop = usePop(delay);
+            return (
+              <div
+                key={label}
+                style={{
+                  opacity: interpolate(pop, [0, 0.4], [0, 1], {
+                    extrapolateRight: "clamp",
+                  }),
+                  transform: `scale(${interpolate(pop, [0, 1], [0.78, 1])})`,
+                }}
+              >
+                <strong
+                  style={{
+                    display: "block",
+                    color,
+                    fontSize: 132,
+                    lineHeight: 1,
+                    fontWeight: 850,
+                    letterSpacing: -4,
+                  }}
+                >
+                  {value}
+                </strong>
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 20,
+                    color: colors.muted,
+                    fontSize: 28,
+                    fontWeight: 650,
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  </Scene>
+);
+
+/* ------------------------------------------------------------------ */
+/* Scene 7 — Human handoff                                             */
+/* ------------------------------------------------------------------ */
+
+const SceneHandoff = () => {
+  const frame = useCurrentFrame();
+  const flow = useProgress(46, 40);
+  const pulseX = frame > 92 ? ((frame - 92) * 3.4) % 244 : -30;
+  return (
+    <Scene duration={125}>
+      <Brand />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          textAlign: "center",
+        }}
+      >
+        <div>
+          <Reveal delay={8}>
+            <Title max={1200} size={96} center>
+              And when it matters,
+              <br />
+              <Accent>your team takes over.</Accent>
+            </Title>
+          </Reveal>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 36,
+              marginTop: 100,
+            }}
+          >
+            <ClaraAvatar size={96} />
+            <div
+              style={{
+                position: "relative",
+                width: 220,
+                height: 5,
+                borderRadius: 5,
+                background: colors.line,
+              }}
+            >
+              <div
+                style={{
+                  width: `${flow * 100}%`,
+                  height: "100%",
+                  borderRadius: 5,
+                  background: `linear-gradient(90deg, ${colors.blue}, ${colors.tealBright})`,
+                }}
+              />
+              {frame > 92 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    left: pulseX - 7,
+                    top: -5,
+                    width: 15,
+                    height: 15,
+                    borderRadius: 15,
+                    background: colors.tealBright,
+                    boxShadow: `0 0 18px ${colors.tealBright}`,
+                  }}
+                />
+              )}
+            </div>
+            <div
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 96,
+                display: "grid",
+                placeItems: "center",
+                background: "#ffffff",
+                border: `2px solid ${colors.line}`,
+                boxShadow: "0 20px 50px rgba(15,23,42,.12)",
+                fontSize: 44,
+                opacity: 0.35 + flow * 0.65,
+                transform: `scale(${0.92 + flow * 0.08})`,
+              }}
+            >
+              👤
+            </div>
+          </div>
+          <Reveal delay={70}>
+            <p
+              style={{
+                margin: "56px 0 0",
+                color: colors.muted,
+                fontSize: 29,
+                fontWeight: 600,
+              }}
+            >
+              Handed off instantly — with the full story attached.
+            </p>
+          </Reveal>
+        </div>
+      </div>
+    </Scene>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Scene 8 — Close                                                     */
+/* ------------------------------------------------------------------ */
+
+const SceneClose = () => {
+  const frame = useCurrentFrame();
+  const pulse = 1 + Math.sin(frame / 9) * 0.014;
+  const glow = 0.32 + 0.16 * Math.abs(Math.sin(frame / 9));
+  return (
+    <Scene dark duration={125}>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          textAlign: "center",
+          padding: 120,
+        }}
+      >
+        <div>
+          <Reveal delay={10} from={24}>
+            <Img src={logoDarkUrl} style={{ width: 470, height: "auto" }} />
+          </Reveal>
+          <Reveal delay={26}>
+            <Title dark max={1300} size={104} center>
+              Every lead <Accent>captured.</Accent>
+            </Title>
+          </Reveal>
+          <Reveal delay={46} style={{ marginTop: 56, display: "flex", justifyContent: "center" }}>
+            <div
+              style={{
+                borderRadius: 16,
+                background: `linear-gradient(120deg, ${colors.blue}, ${colors.teal})`,
+                color: "#ffffff",
+                padding: "24px 46px",
+                fontSize: 31,
+                fontWeight: 850,
+                transform: `scale(${pulse})`,
+                boxShadow: `0 24px 70px rgba(37,99,235,${glow})`,
+              }}
+            >
+              See Clara live — book a demo
+            </div>
+          </Reveal>
+        </div>
+      </div>
+    </Scene>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+
 export const RelayClarityLaunchVideo: React.FC = () => (
-  <AbsoluteFill style={base}>
-    <Sequence from={0} durationInFrames={140}>
+  <AbsoluteFill style={{ ...base, background: "#050d1c" }}>
+    <Sequence from={0} durationInFrames={150}>
       <SceneOpen />
     </Sequence>
-    <Sequence from={140} durationInFrames={130}>
-      <SceneConfigure />
+    <Sequence from={150} durationInFrames={125}>
+      <SceneProblem />
     </Sequence>
-    <Sequence from={270} durationInFrames={150}>
-      <SceneSimulate />
+    <Sequence from={275} durationInFrames={170}>
+      <SceneChat />
     </Sequence>
-    <Sequence from={420} durationInFrames={140}>
-      <SceneControls />
+    <Sequence from={445} durationInFrames={160}>
+      <ScenePhone />
     </Sequence>
-    <Sequence from={560} durationInFrames={140}>
-      <SceneMonitor />
+    <Sequence from={605} durationInFrames={160}>
+      <SceneDashboard />
     </Sequence>
-    <Sequence from={700} durationInFrames={120}>
-      <SceneLaunch />
+    <Sequence from={765} durationInFrames={135}>
+      <SceneResults />
     </Sequence>
-    <Sequence from={820} durationInFrames={80}>
-      <SceneFinal />
+    <Sequence from={900} durationInFrames={125}>
+      <SceneHandoff />
+    </Sequence>
+    <Sequence from={1025} durationInFrames={125}>
+      <SceneClose />
     </Sequence>
   </AbsoluteFill>
 );

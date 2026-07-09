@@ -1,0 +1,12 @@
+
+> relayclarity-deployment-platform@1.0.0 client
+> vite --host 0.0.0.0 --strictPort --port 5179
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m443[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5179[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.143:[1m5179[22m/[39m
+[2m11:57:17[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/setup-redesign.css[22m
+[2m12:10:31[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m12:10:48[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles.css[22m

@@ -1,0 +1,12 @@
+
+> relayclarity-deployment-platform@1.0.0 client
+> vite --host 0.0.0.0 --strictPort --port 5174
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m631[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5174[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.143:[1m5174[22m/[39m
+[2m14:33:22[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m14:33:25[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m14:33:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m

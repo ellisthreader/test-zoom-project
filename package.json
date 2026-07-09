@@ -15,7 +15,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "video:preview": "remotion studio remotion/index.tsx",
     "video:render": "remotion render remotion/index.tsx RelayClarityLaunchVideo public/relayclarity-launch-video.mp4 --codec=h264",
-    "test": "tsx --test server/ai/client.test.tsx server/ai/orchestrator.test.tsx server/voice/elevenlabs.test.tsx server/zoom/webhook.test.tsx server/adapters/integrations.test.tsx server/telephony/audio-store.test.tsx",
+    "test": "tsx --test server/ai/client.test.tsx server/ai/orchestrator.test.tsx server/voice/elevenlabs.test.tsx server/zoom/webhook.test.tsx server/adapters/integrations.test.tsx server/adapters/kb.test.tsx server/telephony/audio-store.test.tsx",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -26,6 +26,7 @@
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.0",
     "@vitejs/plugin-react": "^4.3.4",
     "tailwindcss": "^4.3.1",
     "tsx": "^4.22.4",
@@ -33,16 +34,23 @@
     "vite": "^5.4.0"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
     "@remotion/cli": "^4.0.478",
     "@remotion/renderer": "^4.0.478",
+    "@types/nodemailer": "^8.0.1",
     "better-sqlite3": "^12.11.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "framer-motion": "^12.40.0",
+    "nodemailer": "^9.0.3",
     "openai": "^6.42.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "remotion": "^4.0.478"
+    "remotion": "^4.0.478",
+    "three": "^0.185.1"
+  },
+  "allowScripts": {
+    "@fontsource-variable/inter@5.2.8": true
   }
 }

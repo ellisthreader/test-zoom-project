@@ -64,22 +64,31 @@ export async function placeOutboundDemoCall(input: DemoCallInput) {
 
 async function buildDemoTwiml(input: DemoCallInput) {
   const script = buildDemoScript(input);
+  let elevenLabsFallbackReason = '';
 
-  if (hasElevenLabs() && hasPublicAudioBaseUrl()) {
-    const speech = await synthesizeSpeech({ text: script });
+  if (hasElevenLabs()) {
+    if (hasPublicAudioBaseUrl() && await isPublicAudioBaseReachable()) {
+      try {
+        const speech = await synthesizeSpeech({ text: script });
 
-    if (speech.mode === 'audio' && speech.audioBase64) {
-      const audioId = storeTelephonyAudio(Buffer.from(speech.audioBase64, 'base64'), speech.contentType);
-      const audioUrl = `${config.publicBaseUrl.replace(/\/$/, '')}/api/telephony/audio/${encodeURIComponent(audioId)}`;
+        if (speech.mode === 'audio' && speech.audioBase64) {
+          const audioId = storeTelephonyAudio(Buffer.from(speech.audioBase64, 'base64'), speech.contentType);
+          const audioUrl = `${config.publicBaseUrl.replace(/\/$/, '')}/api/telephony/audio/${encodeURIComponent(audioId)}`;
 
-      return {
-        provider: 'elevenlabs',
-        message: 'Using ElevenLabs audio served through the backend.',
-        xml: `<?xml version="1.0" encoding="UTF-8"?>
+          return {
+            provider: 'elevenlabs',
+            message: 'Using ElevenLabs audio served through the backend.',
+            xml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Play>${escapeXml(audioUrl)}</Play>
 </Response>`,
-      };
+          };
+        }
+      } catch (error) {
+        elevenLabsFallbackReason = error instanceof Error ? error.message : String(error);
+      }
+    } else {
+      elevenLabsFallbackReason = 'PUBLIC_BASE_URL is not reachable over public HTTPS.';
     }
   }
 
@@ -88,7 +97,7 @@ async function buildDemoTwiml(input: DemoCallInput) {
   return {
     provider: hasElevenLabs() ? 'twilio_fallback_local_audio_url_required' : 'twilio',
     message: hasElevenLabs()
-      ? 'ElevenLabs is configured, but PUBLIC_BASE_URL must be public for Twilio to fetch generated audio. Falling back to Twilio neural voice.'
+      ? `ElevenLabs is configured, but generated audio is unavailable right now. Falling back to Twilio neural voice.${elevenLabsFallbackReason ? ` Reason: ${elevenLabsFallbackReason}` : ''}`
       : 'ElevenLabs is not configured. Falling back to Twilio neural voice.',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -126,11 +135,29 @@ function hasPublicAudioBaseUrl() {
   }
 }
 
-function normalizePhone(value: string) {
+async function isPublicAudioBaseReachable() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1800);
+
+  try {
+    const response = await fetch(`${config.publicBaseUrl.replace(/\/$/, '')}/api/health`, {
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function normalizeDemoPhone(value: string) {
   const normalized = String(value || '').replace(/[^\d+]/g, '');
   if (!/^\+\d{8,15}$/.test(normalized)) return '';
   return normalized;
 }
+
+const normalizePhone = normalizeDemoPhone;
 
 function escapeXml(value: unknown): string {
   return String(value)

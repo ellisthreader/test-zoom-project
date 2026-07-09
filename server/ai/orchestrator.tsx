@@ -1,5 +1,5 @@
 import { findCustomer } from '../adapters/crm.js';
-import { createTicket } from '../adapters/helpdesk.js';
+import { createHelpdeskTicket } from '../adapters/live-integrations.js';
 import { searchKnowledgeBase } from '../adapters/kb.js';
 import { createJsonResponse } from './client.js';
 import { detectCategory, detectPriority, normalizePriority, shouldEscalate } from './schema.js';
@@ -10,6 +10,7 @@ type ChatTurnRequest = {
   message: string;
   history?: TranscriptTurn[];
   customer?: CustomerLookup;
+  integrationUserId?: string;
   mockAi?: boolean;
 };
 
@@ -44,6 +45,7 @@ type DemoChatTurn = {
 type TicketConversationRequest = {
   channel?: string;
   customer?: CustomerLookup;
+  integrationUserId?: string;
   transcript: TranscriptTurn[] | string;
   mockAi?: boolean;
 };
@@ -154,10 +156,10 @@ function normalizeCategory(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
-export async function runCustomerTurn({ channel = 'chat', message, history = [], customer = {}, mockAi = false }: ChatTurnRequest) {
+export async function runCustomerTurn({ channel = 'chat', message, history = [], customer = {}, integrationUserId = '', mockAi = false }: ChatTurnRequest) {
   if (!message) throw new Error('message is required');
 
-  const crmCustomer = await findCustomer(customer);
+  const crmCustomer = await findCustomer(customer, { userId: integrationUserId });
   const contextDocs = searchKnowledgeBase(message);
   const fallback = (): ChatTurn => {
     const needsTicket = /(refund|delivery|not arrived|broken|complaint|cancel|payment|invoice|reschedule)/i.test(message);
@@ -193,6 +195,7 @@ export async function runCustomerTurn({ channel = 'chat', message, history = [],
     ticket = await createTicketFromConversation({
       channel,
       customer,
+      integrationUserId,
       mockAi,
       transcript: [...history, { role: 'customer', content: message }, { role: 'assistant', content: aiTurn.reply }],
     });
@@ -282,8 +285,8 @@ export async function runDemoCustomerTurn({
       });
 }
 
-export async function createTicketFromConversation({ channel = 'chat', customer = {}, transcript, mockAi = false }: TicketConversationRequest) {
-  const crmCustomer = await findCustomer(customer);
+export async function createTicketFromConversation({ channel = 'chat', customer = {}, integrationUserId = '', transcript, mockAi = false }: TicketConversationRequest) {
+  const crmCustomer = await findCustomer(customer, { userId: integrationUserId });
   const text = transcriptText(transcript);
   const fallback = () => fallbackTicket(text, crmCustomer);
   const ticketDraft = mockAi
@@ -296,7 +299,7 @@ export async function createTicketFromConversation({ channel = 'chat', customer 
         fallback,
       });
 
-  return createTicket({
+  return createHelpdeskTicket(integrationUserId, {
     ...ticketDraft,
     category: normalizeCategory(ticketDraft.category),
     priority: normalizePriority(ticketDraft.priority),
