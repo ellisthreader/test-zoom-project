@@ -9736,54 +9736,6 @@ function Dashboard({
 	                          animate={{ opacity: 1, y: 0, scale: 1 }}
 	                          transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1] }}
 	                        >
-                            <div className="workspace-review-fields" aria-label="Workspace details">
-                              <label className="workspace-field">
-                                <span>Business name</span>
-                                <input
-                                  type="text"
-                                  value={workspaceName}
-                                  onChange={(event) => setWorkspaceName(event.target.value)}
-                                  placeholder={confirmedWorkspaceName}
-                                  data-setup-focus="workspace-name"
-                                />
-                              </label>
-                              <label className="workspace-field">
-                                <span>Business type</span>
-                                <input
-                                  type="text"
-                                  value={businessTypeDraft || confirmedBusinessType}
-                                  onChange={(event) => {
-                                    setBusinessTypeDraft(event.target.value);
-                                    setConfirmedBusinessType(event.target.value);
-                                  }}
-                                  placeholder={playbook.label}
-                                  data-setup-focus="business-type"
-                                />
-                              </label>
-                            </div>
-                            <section className="workspace-goal-review" aria-label="Selected goals" data-setup-focus="goals" tabIndex={-1}>
-                              <div className="workspace-capability-heading">
-                                <div>
-                                  <strong>Goals</strong>
-                                </div>
-                              </div>
-                              <div className="workspace-goal-review-list">
-                                {playbook.goals.map((goal) => (
-                                  <button
-                                    className={selectedGoals.includes(goal.title) ? "is-selected" : ""}
-                                    type="button"
-                                    aria-pressed={selectedGoals.includes(goal.title)}
-                                    onClick={() => toggleGoal(goal.title)}
-                                    key={goal.title}
-                                  >
-                                    {goal.title}
-                                  </button>
-                                ))}
-                              </div>
-                            </section>
-	                          <div className="workspace-selection-meter" aria-live="polite">
-	                            <b>{selectedZoomCapabilityCount} of {zoomAiCapabilities.length} selected</b>
-	                          </div>
 	                          <div className="workspace-capability-sections" aria-label="Select Zoom AI capabilities" data-setup-focus="capabilities" tabIndex={-1}>
 	                            {groupedZoomAiCapabilities.map((group, groupIndex) => {
 	                              const precedingCount = groupedZoomAiCapabilities
