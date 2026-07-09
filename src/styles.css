@@ -38048,6 +38048,10 @@ h1 span:last-child {
   font-weight: 900;
 }
 
+.completed-ops-actions span:empty {
+  display: none;
+}
+
 .completed-ops-kpi-grid,
 .completed-ops-stats {
   display: grid;

@@ -10562,24 +10562,18 @@ function Dashboard({
                             <motion.div
                               className="voice-review-stage"
                               key="voice-review"
-                              layout
                               initial={{ opacity: 0, scale: 0.992, filter: "blur(4px)" }}
                               animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
                               exit={{ opacity: 0, scale: 0.992, filter: "blur(3px)" }}
                               transition={{
-                                layout: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
                                 duration: 0.34,
                                 ease: [0.22, 1, 0.36, 1]
                               }}
                             >
                               <div className="voice-portrait-stack">
-                                <motion.div
-                                  className="voice-review-portrait"
-                                  layoutId={`voice-avatar-${selectedVoice.id}`}
-                                  transition={{ layout: { duration: 0.58, ease: [0.16, 1, 0.3, 1] } }}
-                                >
+                                <div className="voice-review-portrait">
                                   <img src={selectedVoice.avatarUrl} alt="" />
-                                </motion.div>
+                                </div>
                                 <button
                                   className="voice-regenerate-button"
                                   type="button"
@@ -10588,11 +10582,9 @@ function Dashboard({
                                 >
                                   {isRegeneratingVoice ? "Regenerating..." : "Regenerate voice"}
                                 </button>
-                                {voiceRegenerationStatus ? (
-                                  <small className="voice-regenerate-status" aria-live="polite">
-                                    {voiceRegenerationStatus}
-                                  </small>
-                                ) : null}
+                                <small className="voice-regenerate-status" aria-live="polite">
+                                  {isRegeneratingVoice ? "Regenerating voice..." : voiceRegenerationStatus || "Ready to regenerate."}
+                                </small>
                               </div>
 
                               <motion.section
@@ -14566,7 +14558,7 @@ function CompletedOnboardingDashboard({
               onClick={action === "Ask AI" ? () => changeActiveRoute("ai") : action === "Run checks" ? runLaunchGateTests : undefined}
               disabled={action === "Run checks" && launchGateRunState === "running"}
             >
-              <span aria-hidden="true">{action.startsWith("New") ? "+" : action === "Ask AI" ? "AI" : action.includes("Export") ? "EX" : action === "Run checks" ? "OK" : ""}</span>
+              <span aria-hidden="true">{action.startsWith("New") ? "+" : action === "Ask AI" ? "AI" : ""}</span>
               {action === "Run checks" && launchGateRunState === "running" ? "Checking" : action}
             </button>
           ))}
@@ -16151,7 +16143,7 @@ function CompletedOnboardingDashboard({
                           <p>Control the systems agents can read, update, and test.</p>
                         </div>
                         <div className="completed-intg-actions">
-                          <button type="button"><span aria-hidden="true">Run</span> Run checks</button>
+                          <button type="button">Run checks</button>
                           <button
                             className="is-primary"
                             type="button"
@@ -16242,7 +16234,7 @@ function CompletedOnboardingDashboard({
                             }}
                           >
                             <span aria-hidden="true">+</span>
-                            Add integration
+                            Add tool
                           </button>
                         </section>
 
