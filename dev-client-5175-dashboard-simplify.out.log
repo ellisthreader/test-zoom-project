@@ -60,3 +60,26 @@
 [2m16:42:19[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
 [2m16:42:21[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
 [2m16:42:21[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m
+[2m16:42:39[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/setup-redesign.css[22m
+[2m16:42:50[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/setup-redesign.css[22m
+[2m16:42:58[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/setup-redesign.css[22m
+[2m16:43:03[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/setup-redesign.css[22m
+[2m16:43:04[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m16:43:06[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m16:43:06[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m
+[2m16:43:14[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m16:43:15[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m16:43:15[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m
+[2m16:43:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m16:43:21[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m16:43:21[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m
+[2m16:43:22[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m16:43:25[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m16:43:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m
+[2m16:43:35[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m16:43:38[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m16:43:38[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m
+[2m16:43:53[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles.css[22m
+[2m16:44:04[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx[22m
+[2m16:44:06[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m16:44:06[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/main.tsx[22m

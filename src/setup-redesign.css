@@ -5012,7 +5012,15 @@
 
   .onboarding-shell .launch-flat-list p {
     grid-template-columns: minmax(0, 1fr);
-    gap: 5px;
+    gap: 6px;
+  }
+
+  .onboarding-shell .launch-flat-list button {
+    justify-self: start;
+  }
+
+  .onboarding-shell .workspace-review-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .onboarding-shell .launch-system-list small {
@@ -5966,6 +5974,7 @@
 }
 
 .onboarding-shell .agent-tweak-field input,
+.onboarding-shell .agent-tweak-field select,
 .onboarding-shell .agent-tweak-field textarea {
   width: 100%;
   min-width: 0;
@@ -5982,6 +5991,7 @@
 }
 
 .onboarding-shell .agent-tweak-field input:focus,
+.onboarding-shell .agent-tweak-field select:focus,
 .onboarding-shell .agent-tweak-field textarea:focus {
   border-color: rgba(37, 99, 235, 0.5);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);

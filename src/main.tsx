@@ -9586,7 +9586,9 @@ function Dashboard({
   const launchFlatSummaryRows = [
     { label: "Workspace", value: confirmedWorkspaceName, editTarget: "workspace-name" },
     { label: "Business type", value: submittedValue(confirmedBusinessType, playbook.label), editTarget: "business-type" },
+    { label: "Matched playbook", value: playbook.label, editTarget: "business-type" },
     { label: "Agent", value: agentDisplayName, editTarget: "agent-name" },
+    { label: "Agent mission", value: useCase, editTarget: "agent-mission" },
     { label: "First channel", value: launchChannel, editTarget: "launch-channel" },
     { label: "Goals", value: selectedGoals.join(", ") || playbook.goals.slice(0, 2).map((goal) => goal.title).join(", ") || "Review launch goals", editTarget: "goals" }
   ];
@@ -9597,8 +9599,10 @@ function Dashboard({
     { label: "Knowledge", value: submittedValue(agentKnowledge, primaryKnowledgeSource), editTarget: "agent-knowledge" },
     { label: "Handoff", value: submittedValue(agentHandoff, "Escalate with summary and next step"), editTarget: "agent-handoff" },
     { label: "Voice", value: `${selectedVoice.name} - ${selectedVoice.tone}`, editTarget: "voice" },
-    { label: "Voice settings", value: `${voiceStability}% stable, ${voiceSimilarity}% similar, ${voiceSpeed.toFixed(2)}x speed`, editTarget: "voice-settings" },
+    { label: "Voice settings", value: `${voiceStability}% stable, ${voiceSimilarity}% similar, ${voiceSpeed.toFixed(2)}x speed, ${latency}ms response, ${bargeIn ? "interruptions on" : "interruptions off"}`, editTarget: "voice-settings" },
     { label: "Platform notes", value: submittedValue(otherPlatformNote, "None"), editTarget: "platform-notes" },
+    { label: "Readiness", value: `${readiness}%`, editTarget: "tests" },
+    { label: "Evaluation", value: selectedScenario.title, editTarget: "tests" },
     { label: "Tests", value: testRunState === "complete" ? `${launchGateScore}% launch score` : `${completedRunCount} of ${cinematicTestStages.length} checks complete`, editTarget: "tests" }
   ];
 
@@ -10093,6 +10097,20 @@ function Dashboard({
                                       {Array.from(new Set([...playbook.channels, ...channelOptions])).map((channel) => (
                                         <option value={channel} key={channel}>
                                           {channel}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="agent-tweak-field">
+                                    <span>Mission / use case</span>
+                                    <select
+                                      value={useCase}
+                                      onChange={(event) => setUseCase(event.target.value)}
+                                      data-setup-focus="agent-mission"
+                                    >
+                                      {Array.from(new Set([...playbook.missions, ...useCaseOptions])).map((mission) => (
+                                        <option value={mission} key={mission}>
+                                          {mission}
                                         </option>
                                       ))}
                                     </select>
@@ -14180,9 +14198,9 @@ function CompletedOnboardingDashboard({
     analytics: {
       id: "analytics",
       title: "Analytics",
-      summary: "Performance by outcome, voice, knowledge, safety, reviews, and systems.",
-      actions: ["Export"],
-      searchPlaceholder: "Search analytics sections...",
+      summary: "Understand what changed, why it changed, and which part of the agent needs attention.",
+      actions: ["Export report"],
+      searchPlaceholder: "Search performance views...",
       filters: [
         { label: "All", count: metricsTabs.length },
         { label: "Quality", count: 3 },
@@ -14192,7 +14210,7 @@ function CompletedOnboardingDashboard({
       selectedItemId: activeMetricsTabData.id,
       listItems: analyticsListItems,
       onSelectItem: setActiveMetricsTab,
-      addLabel: "View saved reports",
+      addLabel: "Open reports",
       kpis: activeMetricsTabData.metrics.map((metric, index) => ({
         label: metric.label,
         value: metric.value,
@@ -14201,28 +14219,29 @@ function CompletedOnboardingDashboard({
         icon: metric.label.slice(0, 2)
       })),
       detail: {
-        eyebrow: "Active analytics",
+        eyebrow: "Selected view",
         title: activeMetricsTabData.title === "Production metrics" ? "Live metrics" : activeMetricsTabData.title,
         status: activeMetricsTabData.status,
         subtitle: activeMetricsTabData.primaryMeta,
-        description: activeMetricsTabData.summary,
+        description: `${activeMetricsTabData.summary} The chart and takeaways explain the current movement without hiding the detail in another page.`,
         actions: ["Export"],
         stats: activeMetricsTabData.metrics.slice(0, 3),
         sections: [
-          { title: activeMetricsTabData.primaryTitle, description: activeMetricsTabData.chartTotal, bars: analyticsBars },
-          { title: "Key takeaways", rows: [...activeMetricsTabData.items, ...(activeMetricsTabData.checks || [])].slice(0, 4).map((item) => ({ label: item.label, value: item.value, note: item.note })) }
+          { title: activeMetricsTabData.primaryTitle, description: activeMetricsTabData.chartTotal || "Live performance", bars: analyticsBars },
+          { title: "What changed", rows: activeMetricsTabData.items.slice(0, 4).map((item) => ({ label: item.label, value: item.value, note: item.note })) },
+          { title: "Why it matters", rows: (activeMetricsTabData.checks || activeMetricsTabData.items).slice(0, 3).map((item) => ({ label: item.label, value: item.value, note: item.note })) }
         ]
       },
       side: [
-        { title: "Current view", table: [["Section", activeMetricsTabData.label], ["Status", activeMetricsTabData.status], ["Total", activeMetricsTabData.chartTotal || "Live"]] },
-        { title: "Systems to watch", rows: systemsMetricsTab.items.slice(0, 3).map((item) => ({ label: item.label, value: item.value, note: item.note })) }
+        { title: "Read this first", table: [["Question", activeMetricsTabData.label], ["Status", activeMetricsTabData.status], ["Total", activeMetricsTabData.chartTotal || "Live"]] },
+        { title: "Watch next", rows: systemsMetricsTab.items.slice(0, 3).map((item) => ({ label: item.label, value: item.value, note: item.note })) }
       ],
       next: activeMetricsTabData.next
     },
     knowledge: {
       id: "knowledge",
       title: "Knowledge",
-      summary: "Tracking coverage, stale sources, and trust-risk gaps.",
+      summary: "See whether the agent can answer from approved, current sources.",
       actions: ["New source"],
       searchPlaceholder: "Search sources and gaps...",
       filters: [
@@ -14233,7 +14252,7 @@ function CompletedOnboardingDashboard({
       ],
       selectedItemId: knowledgeTimeline[0]?.id || "knowledge",
       listItems: knowledgeTimeline,
-      addLabel: "Add knowledge source",
+      addLabel: "Add source",
       kpis: dashboardPages.knowledge.metrics.map((metric, index) => ({
         label: metric.label,
         value: metric.value,
@@ -14243,20 +14262,21 @@ function CompletedOnboardingDashboard({
       })),
       detail: {
         eyebrow: "Answer quality",
-        title: isClearDbsActive ? "DBS answers are sourced." : "Knowledge ready.",
+        title: isClearDbsActive ? "DBS answer quality" : "Answer quality",
         status: dashboardPages.knowledge.status,
         subtitle: dashboardPages.knowledge.primaryMeta,
-        description: "Review answer gaps, stale sources, and draft updates in one place.",
+        description: "Review source coverage, stale information, missing answers, and draft updates before customers see them.",
         actions: ["Approve draft"],
         stats: knowledgeMetricsTab.metrics.slice(0, 3),
         sections: [
-          { title: dashboardPages.knowledge.primaryTitle, description: "Answer gaps to review first.", activity: (dashboardPages.knowledge.timeline || []).map((item) => ({ time: item.time, title: item.title, detail: item.detail, tag: item.tag })) },
-          { title: "Source health", rows: knowledgeSourceRows.slice(0, 4) }
+          { title: "Answer gaps", description: "Fix these first to improve customer trust.", activity: (dashboardPages.knowledge.timeline || []).map((item) => ({ time: item.time, title: item.title, detail: item.detail, tag: item.tag })) },
+          { title: "Source health", rows: knowledgeSourceRows.slice(0, 4) },
+          { title: "Source activity", activity: knowledgeActivity.slice(0, 3) }
         ]
       },
       side: [
-        { title: "Source health", table: [["Sourced answers", `${liveMetrics.citationCoverage}%`], ["Missing info", String(liveMetrics.retrievalMisses)], ["Outdated sources", String(liveMetrics.staleSources)], ["Last sync", `${liveMetrics.knowledgeSyncMinutes}m ago`]] },
-        { title: "Source activity", activity: knowledgeActivity.slice(0, 3) }
+        { title: "Quality snapshot", table: [["Sourced answers", `${liveMetrics.citationCoverage}%`], ["Missing info", String(liveMetrics.retrievalMisses)], ["Outdated sources", String(liveMetrics.staleSources)], ["Last sync", `${liveMetrics.knowledgeSyncMinutes}m ago`]] },
+        { title: "Connected source", rows: integrationUsageByKey.knowledge.stats.slice(0, 3).map((stat) => ({ label: stat.label, value: stat.value, note: stat.detail })) }
       ],
       next: dashboardPages.knowledge.next
     },
@@ -14304,49 +14324,48 @@ function CompletedOnboardingDashboard({
     },
     launch: {
       id: "launch",
-      title: "Launch & Billing",
-      summary: "Plan, invoice, payment, and launch status in one view.",
+      title: "Model Health",
+      summary: "The live health of the AI model: quality, safety, speed, knowledge, and tool reliability.",
       actions: ["Run checks"],
-      searchPlaceholder: "Search billing records...",
+      searchPlaceholder: "Search health checks...",
       filters: [
-        { label: "All", count: billingListItems.length },
-        { label: "Ready", count: launchGateAllowed ? 2 : 0 },
-        { label: "Pending", count: launchGateAllowed ? 1 : 3 },
-        { label: "Usage", count: 1 }
+        { label: "All", count: modelHealthListItems.length },
+        { label: "Healthy", count: modelHealthListItems.filter((item) => item.tone === "green").length },
+        { label: "Watch", count: modelHealthListItems.filter((item) => item.tone === "amber").length },
+        { label: "Risk", count: modelHealthListItems.filter((item) => item.tone === "red").length }
       ],
-      selectedItemId: billingListItems[0].id,
-      listItems: billingListItems,
-      addLabel: "Add billing note",
+      selectedItemId: modelHealthListItems[0].id,
+      listItems: modelHealthListItems,
+      addLabel: "Open health log",
       kpis: [
-        { label: "Readiness", value: `${launchGateScore}%`, trend: launchGateAllowed ? "Ready" : "90% required", tone: launchGateAllowed ? "green" : "amber", icon: "RD" },
-        { label: "Tests passed", value: `${launchGateScenarioPassRate}%`, trend: "Customer tests", tone: "purple", icon: "TP" },
-        { label: "Systems", value: `${launchGateConnectionScore}%`, trend: "Required tools", tone: "blue", icon: "SY" },
-        { label: "Issues", value: String(launchGateCriticalFailures.length), trend: launchGateAllowed ? "None" : "Needs fixes", tone: launchGateAllowed ? "green" : "red", icon: "IS" }
+        { label: "Health score", value: `${launchGateScore}%`, trend: launchGateAllowed ? "Healthy" : "Needs review", tone: launchGateAllowed ? "green" : "amber", icon: "HS" },
+        { label: "Safety", value: `${launchGateSafetyScore}%`, trend: liveMetrics.policyViolations === 0 ? "No critical breaks" : "Review rules", tone: liveMetrics.policyViolations === 0 ? "green" : "red", icon: "SF" },
+        { label: "Knowledge", value: `${liveMetrics.citationCoverage}%`, trend: `${liveMetrics.staleSources} stale sources`, tone: liveMetrics.staleSources ? "amber" : "blue", icon: "KG" },
+        { label: "Tool health", value: `${launchGateConnectionScore}%`, trend: launchGateRequiredConnectionsPassed ? "Passing" : "Fix required", tone: launchGateRequiredConnectionsPassed ? "green" : "red", icon: "TH" }
       ],
       detail: {
-        eyebrow: "Billing account",
-        title: completedLaunchDetails[0].value,
-        status: launchGateAllowed ? "Ready" : "Needs review",
+        eyebrow: "Live health",
+        title: activeProject.name,
+        status: launchGateAllowed ? "Healthy" : "Needs review",
         subtitle: completedLaunchDetails[1].value,
-        description: launchGateAllowed ? "Billing is ready." : launchGateStatusDetail,
+        description: launchGateAllowed ? "The model is healthy enough for customer traffic." : launchGateStatusDetail,
         actions: ["Run checks"],
         stats: [
-          { label: "Submitted", value: activeProject.launchReport ? "Yes" : "Demo", detail: "Request record" },
-          { label: "Systems", value: `${launchGateConnectionScore}%`, detail: "Required tools" },
-          { label: "Safety", value: `${launchGateSafetyScore}%`, detail: "Rules tested" }
+          { label: "Reply time", value: `${latencySeconds}s`, detail: "Voice response" },
+          { label: "Safety", value: `${launchGateSafetyScore}%`, detail: "Rules tested" },
+          { label: "Knowledge", value: `${liveMetrics.citationCoverage}%`, detail: "Sourced answers" }
         ],
         sections: [
-          { title: "Billing details", rows: billingRows },
-          { title: "Included systems", rows: billingSystemRows },
-          { title: "Launch checks", activity: launchGateFixItems.map((item, index) => ({ time: String(index + 1).padStart(2, "0"), title: item, detail: launchGateAllowed ? "Clear" : launchGateFixSummary, tag: launchGateAllowed ? "Clear" : "Fix" })) }
+          { title: "Health signals", rows: modelHealthRows },
+          { title: "Required tools", rows: modelHealthSystemRows },
+          { title: "Health checks", activity: launchGateFixItems.map((item, index) => ({ time: String(index + 1).padStart(2, "0"), title: item, detail: launchGateAllowed ? "Clear" : launchGateFixSummary, tag: launchGateAllowed ? "Clear" : "Fix" })) }
         ]
       },
       side: [
-        { title: "Account fields", table: completedLaunchDetails.slice(0, 5).map((row) => [row.label, row.value]) },
-        { title: "Selected scope", chips: completedLaunchCapabilities.length ? completedLaunchCapabilities : ["No capabilities submitted"] },
-        { title: "Goals", chips: completedLaunchGoals.length ? completedLaunchGoals : ["No goals submitted"] }
+        { title: "Health snapshot", table: [["Model", activeProject.name], ["Status", launchGateAllowed ? "Healthy" : "Review"], ["Open risks", String(liveMetrics.openRisks)], ["Last sync", `${liveMetrics.knowledgeSyncMinutes}m ago`]] },
+        { title: "Watchlist", rows: modelHealthRiskRows }
       ],
-      next: dashboardPages.launch.next
+      next: launchGateAllowed ? ["Keep monitoring", "Export health report", "Review weekly drift"] : ["Fix health risks", "Run checks again", "Ask AI for next steps"]
     }
   };
   const activeOpsPage = activeDashboardPage ? opsDashboardPages[activeRoute] : undefined;
@@ -14627,7 +14646,7 @@ function CompletedOnboardingDashboard({
             </nav>
           </header>
 
-          {page.detail.sections.slice(0, 2).map(renderOpsSection)}
+          {page.detail.sections.map(renderOpsSection)}
         </section>
 
         <aside className="completed-ops-side" aria-label={`${page.title} context`}>
@@ -14865,7 +14884,7 @@ function CompletedOnboardingDashboard({
             <section
               className={[
                 "completed-route-page",
-                activeRoute === "launch" ? "is-ops is-billing" : "",
+                activeRoute === "launch" ? "is-ops is-health" : "",
                 activeRoute === "metrics" ? "is-ops is-metrics" : "",
                 activeRoute === "analytics" ? "is-ops is-analytics" : "",
                 activeRoute === "knowledge" ? "is-ops is-knowledge" : "",
@@ -16125,11 +16144,11 @@ function CompletedOnboardingDashboard({
                       </div>
                     </section>
 	              ) : activeRoute === "integrations" ? (
-                    <section className="completed-intg-page" aria-label="Integrations">
+                    <section className="completed-intg-page" aria-label="Connected tools">
                       <header className="completed-intg-header">
                         <div>
-                          <h2>Integrations</h2>
-                          <p>Connect the tools agents use.</p>
+                          <h2>Connected Tools</h2>
+                          <p>Control the systems agents can read, update, and test.</p>
                         </div>
                         <div className="completed-intg-actions">
                           <button type="button"><span aria-hidden="true">Run</span> Run checks</button>
@@ -16141,12 +16160,12 @@ function CompletedOnboardingDashboard({
                               setIsAddIntegrationModalOpen(true);
                             }}
                           >
-                            <span aria-hidden="true">+</span> Add Integration
+                            <span aria-hidden="true">+</span> Add tool
                           </button>
                         </div>
                       </header>
 
-                      <div className="completed-intg-kpi-grid" aria-label="Integration metrics">
+                      <div className="completed-intg-kpi-grid" aria-label="Connected tool metrics">
                         {integrationsKpis.map((metric) => (
                           <article className={`is-${metric.tone}`} key={metric.label}>
                             <i className={`is-${metric.icon}`} aria-hidden="true"></i>
