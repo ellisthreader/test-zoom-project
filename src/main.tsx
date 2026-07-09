@@ -7703,6 +7703,7 @@ function Dashboard({
   const [setupLoginIntegrationPassword, setSetupLoginIntegrationPassword] = useState("");
   const setupIntegrationLoginTimers = useRef<number[]>([]);
   const [launchStage, setLaunchStage] = useState<"review" | "contact">("review");
+  const [setupFocusTarget, setSetupFocusTarget] = useState("");
   const [launchRequestSubmitted, setLaunchRequestSubmitted] = useState(false);
   const [isTailoring, setIsTailoring] = useState(false);
   const [integrationCatalog, setIntegrationCatalog] = useState<IntegrationProvider[]>([]);
@@ -7907,6 +7908,37 @@ function Dashboard({
     setVisitedSetupSteps((current) => current.includes(clampedStep) ? current : [...current, clampedStep]);
     window.history[mode === "push" ? "pushState" : "replaceState"]({ view: "setup", step: clampedStep }, "", setupStepUrl(clampedStep));
   };
+  const editLaunchReviewDetail = (target: string) => {
+    setSetupFocusTarget(target);
+
+    if (target === "website-url" || target === "phone-contact") {
+      setLaunchStage("contact");
+      return;
+    }
+
+    if (target === "voice" || target === "voice-settings") {
+      setVoiceSettingsRevealed(true);
+      navigateToSetupStep(3);
+      return;
+    }
+
+    if (target === "tests") {
+      navigateToSetupStep(4);
+      return;
+    }
+
+    if (target === "connected-systems" || target === "platform-notes") {
+      navigateToSetupStep(1);
+      return;
+    }
+
+    if (target === "workspace-name" || target === "business-type" || target === "goals" || target === "capabilities") {
+      navigateToSetupStep(0);
+      return;
+    }
+
+    navigateToSetupStep(2);
+  };
   const readiness = Math.min(98, 28 + Math.round((connectedCount / connectors.length) * 48) + (latency <= 800 && bargeIn ? 18 : 10));
   const selectedScenario = playbook.tests[scenarioIndex] || playbook.tests[0] || fallbackPlaybook.tests[0];
   const launchGateScore = useMemo(() => {
@@ -7925,6 +7957,30 @@ function Dashboard({
       setVoiceSettingsRevealed(false);
     }
   }, [step, voiceSettingsRevealed]);
+
+  useEffect(() => {
+    if (!setupFocusTarget) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      const targetElement = document.querySelector<HTMLElement>(`[data-setup-focus="${setupFocusTarget}"]`);
+
+      if (!targetElement) {
+        return;
+      }
+
+      const focusableElement = targetElement.matches("input, textarea, select, button, [tabindex]")
+        ? targetElement
+        : targetElement.querySelector<HTMLElement>("input, textarea, select, button, [tabindex]");
+
+      targetElement.scrollIntoView({ block: "center", behavior: "smooth" });
+      (focusableElement || targetElement).focus({ preventScroll: true });
+      setSetupFocusTarget("");
+    }, 420);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [launchStage, setupFocusTarget, showWorkflowCanvas, step, voiceSettingsRevealed]);
 
   useEffect(() => {
     if (!canOpenStep(step)) {
@@ -8455,7 +8511,7 @@ function Dashboard({
 
       setActiveAudioUrl(selectedVoice.sampleAudioUrl);
       playVoiceSample(selectedVoice);
-      setVoiceRegenerationStatus(result.message || "Voice regenerated. Playing preview.");
+      setVoiceRegenerationStatus("Voice regenerated. Playing preview.");
     } catch (error) {
       const failedAttempts = voiceRegenerationAttemptsRef.current.filter((time) => time !== now);
       voiceRegenerationAttemptsRef.current = failedAttempts;
@@ -9618,6 +9674,7 @@ function Dashboard({
 	                                value={workspaceName}
                                   onChange={(event) => setWorkspaceName(event.target.value)}
 	                                placeholder="e.g. Bear Lane"
+                                  data-setup-focus="workspace-name"
 	                              />
 	                            </label>
 		                            <label className="workspace-field">
@@ -9633,6 +9690,7 @@ function Dashboard({
 	                                  }
 	                                }}
 		                                  placeholder="e.g. dental clinic, estate agency, SaaS support team"
+                                      data-setup-focus="business-type"
 		                                />
 		                            </label>
                               {businessSuggestions.length > 0 ? (
@@ -9670,10 +9728,55 @@ function Dashboard({
 	                          animate={{ opacity: 1, y: 0, scale: 1 }}
 	                          transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1] }}
 	                        >
+                            <div className="workspace-review-fields" aria-label="Workspace details">
+                              <label className="workspace-field">
+                                <span>Business name</span>
+                                <input
+                                  type="text"
+                                  value={workspaceName}
+                                  onChange={(event) => setWorkspaceName(event.target.value)}
+                                  placeholder={confirmedWorkspaceName}
+                                  data-setup-focus="workspace-name"
+                                />
+                              </label>
+                              <label className="workspace-field">
+                                <span>Business type</span>
+                                <input
+                                  type="text"
+                                  value={businessTypeDraft || confirmedBusinessType}
+                                  onChange={(event) => {
+                                    setBusinessTypeDraft(event.target.value);
+                                    setConfirmedBusinessType(event.target.value);
+                                  }}
+                                  placeholder={playbook.label}
+                                  data-setup-focus="business-type"
+                                />
+                              </label>
+                            </div>
+                            <section className="workspace-goal-review" aria-label="Selected goals" data-setup-focus="goals" tabIndex={-1}>
+                              <div className="workspace-capability-heading">
+                                <div>
+                                  <strong>Goals</strong>
+                                </div>
+                              </div>
+                              <div className="workspace-goal-review-list">
+                                {playbook.goals.map((goal) => (
+                                  <button
+                                    className={selectedGoals.includes(goal.title) ? "is-selected" : ""}
+                                    type="button"
+                                    aria-pressed={selectedGoals.includes(goal.title)}
+                                    onClick={() => toggleGoal(goal.title)}
+                                    key={goal.title}
+                                  >
+                                    {goal.title}
+                                  </button>
+                                ))}
+                              </div>
+                            </section>
 	                          <div className="workspace-selection-meter" aria-live="polite">
 	                            <b>{selectedZoomCapabilityCount} of {zoomAiCapabilities.length} selected</b>
 	                          </div>
-	                          <div className="workspace-capability-sections" aria-label="Select Zoom AI capabilities">
+	                          <div className="workspace-capability-sections" aria-label="Select Zoom AI capabilities" data-setup-focus="capabilities" tabIndex={-1}>
 	                            {groupedZoomAiCapabilities.map((group, groupIndex) => {
 	                              const precedingCount = groupedZoomAiCapabilities
 	                                .slice(0, groupIndex)
@@ -9733,7 +9836,7 @@ function Dashboard({
                               Growth
                             </button>
 	                        </div>
-                        <div className="connector-list">
+                        <div className="connector-list" data-setup-focus="connected-systems" tabIndex={-1}>
                           {visibleConnectors.map((connector, index) => (
                             <motion.article
                               className={`${connector.connected ? "is-connected" : ""} ${connector.key === activeConnector.key ? "is-active" : ""}`}
@@ -9756,6 +9859,7 @@ function Dashboard({
                           <button
                             className="setup-integration-add-button"
                             type="button"
+                            data-setup-focus="platform-notes"
                             onClick={() => {
                               setSetupIntegrationCategory(connectorCategory);
                               setSetupLoginIntegration(null);
@@ -9966,19 +10070,69 @@ function Dashboard({
                                     <button type="button" onClick={resetWorkflowNodeEditsForActiveAgent}>Reset</button>
                                   </div>
                                   <label className="agent-tweak-field">
+                                    <span>Agent name</span>
+                                    <input
+                                      type="text"
+                                      value={agentName}
+                                      onChange={(event) => setAgentName(event.target.value)}
+                                      placeholder={activeWorkspaceAgent.name}
+                                      data-setup-focus="agent-name"
+                                    />
+                                  </label>
+                                  <label className="agent-tweak-field">
+                                    <span>First channel</span>
+                                    <select
+                                      value={launchChannel}
+                                      onChange={(event) => setLaunchChannel(event.target.value)}
+                                      data-setup-focus="launch-channel"
+                                    >
+                                      {Array.from(new Set([...playbook.channels, ...channelOptions])).map((channel) => (
+                                        <option value={channel} key={channel}>
+                                          {channel}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="agent-tweak-field">
                                     <span>When it starts</span>
                                     <input
                                       type="text"
                                       value={workflowNodeContent.trigger.title}
+                                      data-setup-focus="agent-trigger"
                                       onChange={(event) => updateWorkflowNodeEdit("trigger", "title", event.target.value)}
                                     />
                                   </label>
                                   <label className="agent-tweak-field">
                                     <span>Instructions</span>
                                     <textarea
-                                      value={workflowNodeContent.instructions.detail}
-                                      onChange={(event) => updateWorkflowNodeEdit("instructions", "detail", event.target.value)}
+                                      value={agentPurpose}
+                                      onChange={(event) => {
+                                        setAgentPurpose(event.target.value);
+                                        updateWorkflowNodeEdit("instructions", "detail", event.target.value);
+                                      }}
+                                      placeholder={workflowNodeContent.instructions.detail}
                                       rows={3}
+                                      data-setup-focus="agent-instructions"
+                                    />
+                                  </label>
+                                  <label className="agent-tweak-field">
+                                    <span>Knowledge</span>
+                                    <textarea
+                                      value={agentKnowledge}
+                                      onChange={(event) => setAgentKnowledge(event.target.value)}
+                                      placeholder={primaryKnowledgeSource}
+                                      rows={3}
+                                      data-setup-focus="agent-knowledge"
+                                    />
+                                  </label>
+                                  <label className="agent-tweak-field">
+                                    <span>Handoff rule</span>
+                                    <textarea
+                                      value={agentHandoff}
+                                      onChange={(event) => setAgentHandoff(event.target.value)}
+                                      placeholder="Escalate with summary and next step"
+                                      rows={3}
+                                      data-setup-focus="agent-handoff"
                                     />
                                   </label>
                                   <label className="agent-tweak-field">
@@ -10330,7 +10484,7 @@ function Dashboard({
                                 ease: [0.22, 1, 0.36, 1]
                               }}
                             >
-                              <section className="voice-rail" aria-label="Choose a voice agent">
+                              <section className="voice-rail" aria-label="Choose a voice agent" data-setup-focus="voice" tabIndex={-1}>
                                 {elevenLabsVoices.map((voice, index) => (
                                   <motion.button
                                     className={[
@@ -10426,7 +10580,7 @@ function Dashboard({
                                 animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
                                 transition={{ duration: 0.36, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
                               >
-                                <details className="voice-settings-dropdown" open>
+                                <details className="voice-settings-dropdown" open data-setup-focus="voice-settings">
                                   <summary>
                                     <span className="voice-settings-summary-copy">
                                       <span>Voice settings</span>
@@ -10581,7 +10735,7 @@ function Dashboard({
 
                   {step === 4 ? (
                     <div className="test-step">
-                      <section className={`test-cinematic-runner ${testRunState === "running" ? "is-running" : ""} ${testsComplete ? "is-complete" : ""}`} aria-label="Automated launch test sequence" aria-live="polite">
+                      <section className={`test-cinematic-runner ${testRunState === "running" ? "is-running" : ""} ${testsComplete ? "is-complete" : ""}`} aria-label="Automated launch test sequence" aria-live="polite" data-setup-focus="tests" tabIndex={-1}>
                         <div className="test-cinematic-header">
                           <div>
                             <span>Launch simulation</span>
@@ -10960,6 +11114,7 @@ function Dashboard({
                                     setLaunchRequestSubmitted(false);
                                   }}
                                   placeholder="https://yourcompany.com"
+                                  data-setup-focus="website-url"
                                 />
                               </label>
                               <label>
@@ -10972,6 +11127,7 @@ function Dashboard({
                                     setLaunchRequestSubmitted(false);
                                   }}
                                   placeholder="+1 555 010 1234"
+                                  data-setup-focus="phone-contact"
                                 />
                               </label>
                             </div>
@@ -12792,7 +12948,7 @@ function CompletedOnboardingDashboard({
     { id: "analytics", label: "Analytics", icon: "▥" },
     { id: "handoffs", label: "Follow-ups", icon: "♙" },
     { id: "integrations", label: "Integrations", icon: "✳" },
-    { id: "launch", label: "Launch & Billing", icon: "▰" }
+    { id: "launch", label: "Model Health", icon: "▰" }
   ];
   const metricsDashboardKpis = isClearDbsActive ? [
     {
@@ -14488,7 +14644,7 @@ function CompletedOnboardingDashboard({
               activeRoute === "knowledge" ? "Knowledge" :
               activeRoute === "handoffs" ? "Follow-ups" :
               activeRoute === "integrations" ? "Integrations" :
-              activeRoute === "launch" ? "Launch & Billing" :
+              activeRoute === "launch" ? "Model Health" :
               "";
             const isActive = item.label === activeSidebarLabel;
 

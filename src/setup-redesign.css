@@ -2540,10 +2540,6 @@
   transform: translateX(20px);
 }
 
-.onboarding-shell .voice-playback-review {
-  width: 100%;
-}
-
 .onboarding-shell .voice-confirm-panel {
   display: flex;
   align-items: center;
@@ -6321,10 +6317,6 @@
 
   .onboarding-shell .voice-setting-row small {
     font-size: 11.5px;
-  }
-
-  .onboarding-shell .voice-playback-review audio {
-    height: 34px;
   }
 
   .onboarding-shell .agent-studio-detail-head {
