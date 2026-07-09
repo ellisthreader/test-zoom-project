@@ -4220,7 +4220,7 @@
 /* ---------- Step 6 · Launch ---------- */
 
 .onboarding-shell:has(.launch-request-panel) {
-  background: #f6f7f9;
+  background: #ffffff;
 }
 
 .onboarding-shell:has(.launch-request-panel)::before {
@@ -4236,14 +4236,14 @@
 }
 
 .onboarding-shell:has(.launch-request-panel) .onboarding-actions {
-  border-top: 1px solid var(--setup-line-soft);
-  background: transparent;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
 }
 
 .onboarding-shell .launch-request-panel {
   display: grid;
-  gap: 22px;
-  width: min(760px, 100%);
+  gap: 20px;
+  width: min(820px, 100%);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -4256,8 +4256,8 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: start;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(100, 116, 139, 0.26);
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.14);
 }
 
 .onboarding-shell .launch-flat-top span,
@@ -4274,26 +4274,26 @@
 .onboarding-shell .launch-flat-top h2 {
   margin: 7px 0 0;
   color: var(--setup-ink);
-  font-size: clamp(28px, 3.5vw, 36px);
-  font-weight: 820;
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 800;
   letter-spacing: 0;
-  line-height: 1.02;
+  line-height: 1.05;
 }
 
 .onboarding-shell .launch-flat-top p,
 .onboarding-shell .launch-flat-section header p {
   max-width: 640px;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: var(--setup-text);
-  font-size: 14.5px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .onboarding-shell .launch-flat-top > strong {
   justify-self: end;
   max-width: 220px;
-  color: #334155;
-  font-size: 13px;
+  color: #0f172a;
+  font-size: 12.5px;
   font-weight: 760;
   line-height: 1.35;
   text-align: right;
@@ -4303,8 +4303,8 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  border-top: 1px solid rgba(100, 116, 139, 0.2);
-  border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+  border-top: 1px solid rgba(15, 23, 42, 0.12);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
 }
 
 .onboarding-shell .launch-flat-flow span {
@@ -4313,11 +4313,16 @@
   gap: 9px;
   min-width: 0;
   min-height: 46px;
-  border-right: 1px solid rgba(100, 116, 139, 0.16);
-  color: #334155;
+  border-right: 1px solid rgba(15, 23, 42, 0.1);
+  color: #64748b;
   font-size: 13px;
   font-weight: 700;
   padding: 0 14px;
+}
+
+.onboarding-shell .launch-flat-flow span.is-active,
+.onboarding-shell .launch-flat-flow span.is-complete {
+  color: #0f172a;
 }
 
 .onboarding-shell .launch-flat-flow span:last-child {
@@ -4330,18 +4335,30 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border: 1px solid rgba(100, 116, 139, 0.3);
+  border: 1px solid rgba(100, 116, 139, 0.34);
   border-radius: 999px;
   color: #0f172a;
   font-size: 11px;
   font-weight: 850;
 }
 
+.onboarding-shell .launch-flat-flow span.is-active b {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.onboarding-shell .launch-flat-flow span.is-complete b {
+  border-color: rgba(14, 159, 110, 0.38);
+  background: rgba(14, 159, 110, 0.1);
+  color: #047857;
+}
+
 .onboarding-shell .launch-flat-section {
   display: grid;
-  gap: 14px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
 }
 
 .onboarding-shell .launch-flat-scope {
@@ -4410,15 +4427,15 @@
   gap: 16px;
   align-items: start;
   margin: 0;
-  padding: 10px 0;
-  border-top: 1px solid rgba(100, 116, 139, 0.14);
+  padding: 11px 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
 }
 
 .onboarding-shell .launch-flat-list strong {
   min-width: 0;
   color: var(--setup-ink);
   font-size: 14px;
-  font-weight: 680;
+  font-weight: 700;
   line-height: 1.42;
   overflow-wrap: anywhere;
 }

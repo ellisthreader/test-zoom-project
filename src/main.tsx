@@ -7702,6 +7702,7 @@ function Dashboard({
   const [setupLoginIntegrationEmail, setSetupLoginIntegrationEmail] = useState("");
   const [setupLoginIntegrationPassword, setSetupLoginIntegrationPassword] = useState("");
   const setupIntegrationLoginTimers = useRef<number[]>([]);
+  const [launchStage, setLaunchStage] = useState<"review" | "contact">("review");
   const [launchRequestSubmitted, setLaunchRequestSubmitted] = useState(false);
   const [isTailoring, setIsTailoring] = useState(false);
   const [integrationCatalog, setIntegrationCatalog] = useState<IntegrationProvider[]>([]);
@@ -7862,9 +7863,14 @@ function Dashboard({
           title: "Launch request sent",
           detail: "Engineering will review the live route and follow up."
         }
+      : launchStage === "review"
+        ? {
+            title: "Review the details",
+            detail: "Check the setup details before adding launch contact information."
+          }
       : {
-          title: "Request your launch",
-          detail: "Confirm the live route for engineering."
+          title: "Add launch contact",
+          detail: "Enter the live website and phone route."
         }
   ];
   const selectedZoomCapabilityCount = selectedCapabilities.length;
@@ -7883,7 +7889,8 @@ function Dashboard({
     testsComplete,
     hasLaunchRequestDetails
   ];
-  const canContinue = step === 3 && !voiceSettingsRevealed ? hasSelectedVoice : stepCompletion[step] ?? false;
+  const stepCanContinue = step === 3 && !voiceSettingsRevealed ? hasSelectedVoice : stepCompletion[step] ?? false;
+  const canContinue = step === setupSteps.length - 1 && launchStage === "review" ? true : stepCanContinue;
   const firstIncompleteStep = stepCompletion.findIndex((isComplete) => !isComplete);
   const furthestAvailableStep = firstIncompleteStep === -1 ? setupSteps.length - 1 : firstIncompleteStep;
   const canOpenStep = (index: number) => (
@@ -7893,6 +7900,9 @@ function Dashboard({
   );
   const navigateToSetupStep = (nextStep: number, mode: "push" | "replace" = "push") => {
     const clampedStep = Math.max(0, Math.min(setupSteps.length - 1, nextStep));
+    if (clampedStep === setupSteps.length - 1) {
+      setLaunchStage("review");
+    }
     setStep(clampedStep);
     setVisitedSetupSteps((current) => current.includes(clampedStep) ? current : [...current, clampedStep]);
     window.history[mode === "push" ? "pushState" : "replaceState"]({ view: "setup", step: clampedStep }, "", setupStepUrl(clampedStep));
@@ -7929,6 +7939,9 @@ function Dashboard({
       }
 
       const nextStep = readSetupStepFromLocation(setupSteps.length - 1);
+      if (nextStep === setupSteps.length - 1) {
+        setLaunchStage("review");
+      }
       setStep(nextStep);
       setVisitedSetupSteps((current) => current.includes(nextStep) ? current : [...current, nextStep]);
     };
@@ -8596,6 +8609,11 @@ function Dashboard({
     }
 
     if (step === setupSteps.length - 1) {
+      if (launchStage === "review") {
+        setLaunchStage("contact");
+        return;
+      }
+
       generateLaunchPack();
       return;
     }
@@ -9505,22 +9523,23 @@ function Dashboard({
 
   const submittedValue = (value: string, fallback = "Not provided") => value.trim() || fallback;
   const connectedLaunchSystems = connectors.filter((connector) => connector.connected);
-  const launchEngineerActions = [
-    "Verify website entry point",
-    "Confirm phone routing",
-    "Prepare launch handoff"
-  ];
   const launchFlatSummaryRows = [
     { label: "Workspace", value: confirmedWorkspaceName },
     { label: "Business type", value: submittedValue(confirmedBusinessType, playbook.label) },
     { label: "Agent", value: agentDisplayName },
-    { label: "First channel", value: launchChannel }
+    { label: "First channel", value: launchChannel },
+    { label: "Goals", value: selectedGoals.join(", ") || playbook.goals.slice(0, 2).map((goal) => goal.title).join(", ") || "Review launch goals" }
   ];
   const launchFlatScopeRows = [
     { label: "Capabilities", value: selectedCapabilities.join(", ") || "Add capabilities before launch" },
     { label: "Connected systems", value: connectedLaunchSystems.map((connector) => connector.provider).join(", ") || "Connect required systems" },
+    { label: "Instructions", value: submittedValue(agentPurpose, useCase) },
+    { label: "Knowledge", value: submittedValue(agentKnowledge, primaryKnowledgeSource) },
     { label: "Handoff", value: submittedValue(agentHandoff, "Escalate with summary and next step") },
-    { label: "Tests", value: testRunState === "complete" ? `${launchGateScore}% launch score` : `${completedRunCount} of ${playbook.tests.length} checks complete` }
+    { label: "Voice", value: `${selectedVoice.name} - ${selectedVoice.tone}` },
+    { label: "Voice settings", value: `${voiceStability}% stable, ${voiceSimilarity}% similar, ${voiceSpeed.toFixed(2)}x speed` },
+    { label: "Platform notes", value: submittedValue(otherPlatformNote, "None") },
+    { label: "Tests", value: testRunState === "complete" ? `${launchGateScore}% launch score` : `${completedRunCount} of ${cinematicTestStages.length} checks complete` }
   ];
 
   return (
@@ -10557,6 +10576,127 @@ function Dashboard({
 
                   {step === 4 ? (
                     <div className="test-step">
+                      <section className={`test-cinematic-runner ${testRunState === "running" ? "is-running" : ""} ${testsComplete ? "is-complete" : ""}`} aria-label="Automated launch test sequence" aria-live="polite">
+                        <div className="test-cinematic-header">
+                          <div>
+                            <span>Launch simulation</span>
+                            <h2>Run the full production test sequence</h2>
+                            <p>{testsComplete ? `${agentDisplayName} passed the six-stage launch gate at ${launchGateScore}%.` : testRunState === "running" ? `Running ${activeCinematicTest.label}: ${activeCinematicTest.scene}.` : "Start with six checks. Each box runs in order and streams the current test below."}</p>
+                          </div>
+                          <button className="test-run-master-button" type="button" onClick={runLaunchTests} disabled={testRunState === "running"}>
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                              <path d="M8 5.5v13l10-6.5-10-6.5Z" />
+                            </svg>
+                            <span>{testRunButtonLabel}</span>
+                          </button>
+                        </div>
+
+                        <div className="test-runner-grid" aria-label="Six launch checks">
+                          {cinematicTestStages.map((stage, index) => {
+                            const stageState = testRunState === "complete" || index < completedRunCount
+                              ? "complete"
+                              : testRunState === "running" && index === activeRunIndex
+                                ? "running"
+                                : "queued";
+
+                            return (
+                              <motion.article
+                                className={`test-runner-box is-${stageState} is-${stage.id}`}
+                                style={{ "--runner-index": index } as CSSProperties}
+                                initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ delay: index * 0.045, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                                key={stage.id}
+                              >
+                                <span className="test-runner-box-index">{String(index + 1).padStart(2, "0")}</span>
+                                <div>
+                                  <strong>{stage.label}</strong>
+                                  <p>{stage.title}</p>
+                                </div>
+                                <small>{stageState === "complete" ? "Passed" : stageState === "running" ? "Running" : "Queued"}</small>
+                                <i aria-hidden="true"><b style={{ width: stageState === "complete" ? "100%" : stageState === "running" ? "62%" : "0%" }} /></i>
+                              </motion.article>
+                            );
+                          })}
+                        </div>
+
+                        <div className="test-cinematic-stage">
+                          <motion.div
+                            className={`test-visual-stage is-${activeCinematicTest.id}`}
+                            key={activeCinematicTest.id}
+                            initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
+                            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                            aria-hidden="true"
+                          >
+                            <div className="test-visual-core">
+                              <span>{activeCinematicTest.label}</span>
+                              <strong>{testRunState === "idle" ? "Ready" : activeCinematicTest.score + "%"}</strong>
+                            </div>
+                            {activeCinematicTest.id === "live-chat" ? (
+                              <div className="test-visual-chat">
+                                <p><b>Customer</b><span>I need help with this today.</span></p>
+                                <p><b>{agentDisplayName}</b><span>Intent found. Answering from approved context.</span></p>
+                              </div>
+                            ) : null}
+                            {activeCinematicTest.id === "voice" ? (
+                              <div className="test-visual-voice">
+                                {Array.from({ length: 16 }).map((_, index) => (
+                                  <i style={{ height: `${14 + ((index * 13) % 38)}px` }} key={index} />
+                                ))}
+                              </div>
+                            ) : null}
+                            {activeCinematicTest.id === "knowledge" ? (
+                              <div className="test-visual-knowledge">
+                                <span>{primaryKnowledgeSource}</span>
+                                <i><b /></i>
+                                <small>Source matched</small>
+                              </div>
+                            ) : null}
+                            {activeCinematicTest.id === "systems" ? (
+                              <div className="test-visual-systems">
+                                {["CRM", "KB", "Desk"].map((item) => <span key={item}>{item}</span>)}
+                              </div>
+                            ) : null}
+                            {activeCinematicTest.id === "handoff" ? (
+                              <div className="test-visual-handoff">
+                                <span>AI</span>
+                                <i />
+                                <span>Human</span>
+                              </div>
+                            ) : null}
+                            {activeCinematicTest.id === "launch" ? (
+                              <div className="test-visual-launch">
+                                <i />
+                                <span>{launchGateScore}%</span>
+                              </div>
+                            ) : null}
+                          </motion.div>
+
+                          <details className="test-activity-dropdown" open={testRunState === "running" || testsComplete}>
+                            <summary>
+                              <span>{testRunState === "running" ? "Now running" : testsComplete ? "Run complete" : "Activity"}</span>
+                              <strong>{activeCinematicTest.scene}</strong>
+                              <b>{testProgress}%</b>
+                            </summary>
+                            <div className="test-activity-body">
+                              <p>{activeCinematicTest.detail}</p>
+                              <ul>
+                                {activeCinematicTest.checks.map((check, index) => (
+                                  <li className={testRunState === "complete" || index < Math.min(activeCinematicTest.checks.length, completedRunCount + 1) ? "is-done" : ""} key={check}>
+                                    {check}
+                                  </li>
+                                ))}
+                              </ul>
+                              <footer>
+                                <span>{activeCinematicTest.evidence}</span>
+                                <strong>{testRunState === "complete" || completedRunCount > activeRunIndex ? activeCinematicTest.result : "Streaming evidence..."}</strong>
+                              </footer>
+                            </div>
+                          </details>
+                        </div>
+                      </section>
+
                       <div className="test-agent-grid">
                         <aside className="test-agent-summary" aria-label="Agent summary">
                           <h2>Agent summary</h2>
@@ -10753,7 +10893,7 @@ function Dashboard({
                             <aside>
                               <span aria-hidden="true">OK</span>
                               <strong>{testsComplete ? "All set!" : `${testProgress}% ready`}</strong>
-                              <small>{testsComplete ? "You're ready to go live." : "Run voice test to finish."}</small>
+                              <small>{testsComplete ? "You're ready to go live." : "Run tests to finish."}</small>
                             </aside>
                           </section>
                         </div>
@@ -10765,93 +10905,91 @@ function Dashboard({
                     <section className={`launch-request-panel ${launchRequestSubmitted ? "is-submitted" : ""}`}>
                       <div className="launch-flat-top">
                         <div>
-                          <span>{launchRequestSubmitted ? "Submitted" : "Production setup"}</span>
-                          <h2>Confirm launch details</h2>
-                          <p>Provide the live website and phone number. Engineering will use this to finish setup.</p>
+                          <span>{launchRequestSubmitted ? "Submitted" : launchStage === "review" ? "Review details" : "Live route"}</span>
+                          <h2>{launchStage === "review" ? "Review the details" : "Add launch contact"}</h2>
+                          <p>
+                            {launchStage === "review"
+                              ? "Check the setup that will be sent to engineering."
+                              : "Add the live website and phone route for production setup."}
+                          </p>
                         </div>
-                        <strong>{launchRequestSubmitted ? "Follow-up within 48 hours" : "Secure engineering review"}</strong>
+                        <strong>{launchRequestSubmitted ? "Submitted" : launchStage === "review" ? "Step 1 of 2" : "Step 2 of 2"}</strong>
                       </div>
 
                       <div className="launch-flat-flow" aria-label="Launch request workflow">
-                        <span><b>1</b> Enter live route</span>
-                        <span><b>2</b> Review setup</span>
-                        <span><b>3</b> Submit request</span>
+                        <span className={launchStage === "review" ? "is-active" : "is-complete"}><b>1</b> Review details</span>
+                        <span className={launchStage === "contact" ? "is-active" : ""}><b>2</b> Add contact</span>
                       </div>
 
-                      <section className="launch-flat-section" aria-label="Production details">
-                        <header>
-                          <span>Required</span>
-                          <p>Use the live customer-facing route.</p>
-                        </header>
-                        <div className="launch-request-fields">
-                          <label>
-                            Website URL
-                            <input
-                              type="url"
-                              value={websiteUrl}
-                              onChange={(event) => {
-                                setWebsiteUrl(event.target.value);
-                                setLaunchRequestSubmitted(false);
-                              }}
-                              placeholder="https://yourcompany.com"
-                            />
-                          </label>
-                          <label>
-                            Phone contact number
-                            <input
-                              type="tel"
-                              value={phoneContactNumber}
-                              onChange={(event) => {
-                                setPhoneContactNumber(event.target.value);
-                                setLaunchRequestSubmitted(false);
-                              }}
-                              placeholder="+1 555 010 1234"
-                            />
-                          </label>
-                        </div>
-                      </section>
+                      {launchStage === "review" ? (
+                        <>
+                          <section className="launch-flat-section" aria-label="Setup details">
+                            <header>
+                              <span>Setup details</span>
+                              <p>Core details for engineering.</p>
+                            </header>
+                            <div className="launch-flat-list">
+                              {launchFlatSummaryRows.map((row) => (
+                                <p key={row.label}>
+                                  <span>{row.label}</span>
+                                  <strong>{row.value}</strong>
+                                </p>
+                              ))}
+                            </div>
+                          </section>
 
-                      <section className="launch-flat-section" aria-label="Setup summary">
-                        <header>
-                          <span>Setup summary</span>
-                          <p>What engineering will receive.</p>
-                        </header>
-                        <div className="launch-flat-list">
-                          {launchFlatSummaryRows.map((row) => (
-                            <p key={row.label}>
-                              <span>{row.label}</span>
-                              <strong>{row.value}</strong>
-                            </p>
-                          ))}
-                        </div>
-                      </section>
+                          <section className="launch-flat-section" aria-label="Agent scope">
+                            <header>
+                              <span>Agent scope</span>
+                              <p>What the agent is expected to handle.</p>
+                            </header>
+                            <div className="launch-flat-list">
+                              {launchFlatScopeRows.map((row) => (
+                                <p key={row.label}>
+                                  <span>{row.label}</span>
+                                  <strong>{row.value}</strong>
+                                </p>
+                              ))}
+                            </div>
+                          </section>
+                        </>
+                      ) : (
+                        <>
+                          <section className="launch-flat-section" aria-label="Production contact details">
+                            <header>
+                              <span>Contact details</span>
+                              <p>Use the final customer-facing route.</p>
+                            </header>
+                            <div className="launch-request-fields">
+                              <label>
+                                Website URL
+                                <input
+                                  type="url"
+                                  value={websiteUrl}
+                                  onChange={(event) => {
+                                    setWebsiteUrl(event.target.value);
+                                    setLaunchRequestSubmitted(false);
+                                  }}
+                                  placeholder="https://yourcompany.com"
+                                />
+                              </label>
+                              <label>
+                                Phone contact number
+                                <input
+                                  type="tel"
+                                  value={phoneContactNumber}
+                                  onChange={(event) => {
+                                    setPhoneContactNumber(event.target.value);
+                                    setLaunchRequestSubmitted(false);
+                                  }}
+                                  placeholder="+1 555 010 1234"
+                                />
+                              </label>
+                            </div>
+                          </section>
 
-                      <details className="launch-flat-scope">
-                        <summary>
-                          <span>Review setup scope</span>
-                          <strong>Agent scope and checks</strong>
-                        </summary>
-                        <div className="launch-flat-list">
-                          {launchFlatScopeRows.map((row) => (
-                            <p key={row.label}>
-                              <span>{row.label}</span>
-                              <strong>{row.value}</strong>
-                            </p>
-                          ))}
-                        </div>
-                      </details>
-
-                      <section className="launch-flat-section" aria-label="Next engineer actions">
-                        <header>
-                          <span>After submit</span>
-                          <p>Engineering verifies the route and prepares launch.</p>
-                        </header>
-                        <ol className="launch-flat-actions">
-                          {launchEngineerActions.map((action) => (
-                            <li key={action}>{action}</li>
-                          ))}
-                        </ol>
-                      </section>
+                        </>
+                      )}
 
                     </section>
                   ) : null}
@@ -10860,11 +10998,23 @@ function Dashboard({
 
               <div className="onboarding-actions">
                 <div className="onboarding-actions-buttons">
-                  <button className="quiet-button" type="button" onClick={() => navigateToSetupStep(step - 1)} disabled={step === 0}>
+                  <button
+                    className="quiet-button"
+                    type="button"
+                    onClick={() => {
+                      if (step === setupSteps.length - 1 && launchStage === "contact") {
+                        setLaunchStage("review");
+                        return;
+                      }
+
+                      navigateToSetupStep(step - 1);
+                    }}
+                    disabled={step === 0}
+                  >
                     Back
                   </button>
                   <button className="dark-button" type="button" onClick={nextStep} disabled={!canContinue}>
-                    {step === setupSteps.length - 1 ? "Request engineer setup" : "Continue"}
+                    {step === setupSteps.length - 1 && launchStage === "contact" ? "Submit launch details" : "Continue"}
                   </button>
                 </div>
               </div>
@@ -12232,15 +12382,15 @@ function CompletedOnboardingDashboard({
     },
     metrics: {
       eyebrow: isClearDbsActive ? "Clear DBS command centre" : "Production readiness",
-      title: isClearDbsActive ? "Clear DBS support is visible end to end." : "Customer agent is ready to operate.",
+      title: isClearDbsActive ? "Clear DBS support is live." : "Customer agent is live.",
       summary: isClearDbsActive
-        ? "RelayClarity is showing the real operating picture for DBS applicants, employers, voice calls, chats, handoffs, knowledge, and connected systems."
-        : "RelayClarity is tracking the outcome, safety, voice, knowledge, and integration signals that decide whether this agent can run in production.",
+        ? "Live DBS applicants, employers, calls, chats, reviews, knowledge, and tools."
+        : "Live outcomes, safety, voice, knowledge, and tool health.",
       status: liveStatus,
       metrics: [
         { label: "Overall health", value: `${readinessScore}%`, detail: "Ready for client use" },
-        { label: "Solved without staff", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls handled` },
-        { label: "Voice response time", value: `${latencySeconds}s`, detail: "Typical caller wait" },
+        { label: "Solved by AI", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls handled` },
+        { label: "Reply time", value: `${latencySeconds}s`, detail: "Typical wait" },
         { label: "Needs attention", value: String(liveMetrics.openRisks), detail: "Issues to check" }
       ],
       primaryTitle: isClearDbsActive ? "DBS support demand by hour" : "Call demand by hour",
@@ -12255,15 +12405,15 @@ function CompletedOnboardingDashboard({
     },
     analytics: {
       eyebrow: isClearDbsActive ? "Clear DBS analytics" : "Performance analytics",
-      title: "Analytics show how the agent is really performing.",
+      title: "Live performance.",
       summary: isClearDbsActive
-        ? "Deep-dive DBS signals across outcomes, voice quality, knowledge confidence, safety, handoffs, and connected systems."
-        : "Deep-dive signals across outcomes, voice quality, knowledge confidence, safety, handoffs, and connected systems.",
+        ? "DBS outcomes, voice, knowledge, safety, reviews, and tools."
+        : "Outcomes, voice, knowledge, safety, reviews, and tools.",
       status: liveStatus,
       metrics: [
-        { label: "True containment", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls solved` },
+        { label: "Solved by AI", value: `${containmentRate}%`, detail: `${liveMetrics.containedCalls} calls solved` },
         { label: "Customer rating", value: liveMetrics.csat.toFixed(1), detail: "From rated calls" },
-        { label: "Voice response", value: `${latencySeconds}s`, detail: "95% of replies" },
+        { label: "Reply time", value: `${latencySeconds}s`, detail: "95% of replies" },
         { label: "Answer confidence", value: `${liveMetrics.citationCoverage}%`, detail: "Sourced answers" }
       ],
       primaryTitle: "Performance deep dive",
@@ -12351,14 +12501,14 @@ function CompletedOnboardingDashboard({
     },
     knowledge: {
       eyebrow: "Answer quality",
-      title: isClearDbsActive ? "DBS answers are grounded in approved sources." : "Knowledge is current enough to launch.",
-      summary: isClearDbsActive ? "RelayClarity tracks DBS FAQ coverage, status wording, identity-route guidance, and escalation gaps that could affect compliance." : "RelayClarity is tracking answer coverage, stale sources, and the gaps most likely to affect customer trust.",
+      title: isClearDbsActive ? "DBS answers are sourced." : "Knowledge ready.",
+      summary: isClearDbsActive ? "Tracking DBS coverage, wording, identity guidance, and review gaps." : "Tracking coverage, stale sources, and trust-risk gaps.",
       status: isClearDbsActive ? `${liveMetrics.citationCoverage}% sourced` : "91% confident",
       metrics: [
         { label: "Coverage", value: "91%", detail: "Approved sources" },
-        { label: "Draft answers", value: "2", detail: "Ready to review" },
-        { label: "Stale docs", value: "1", detail: "Pricing policy" },
-        { label: "Top intents", value: "8", detail: "Fully covered" }
+        { label: "Draft updates", value: "2", detail: "Ready to review" },
+        { label: "Outdated sources", value: "1", detail: "Pricing policy" },
+        { label: "Questions covered", value: "8", detail: "Fully covered" }
       ],
       primaryTitle: isClearDbsActive ? "DBS knowledge gaps" : "Knowledge gaps",
       primaryMeta: isClearDbsActive ? "Small set of updates that would improve applicant and employer answer confidence." : "Small set of updates that would improve answer confidence.",
@@ -13774,7 +13924,7 @@ function CompletedOnboardingDashboard({
     { id: "contact-compliance", title: "Compliance review", subtitle: "Sensitive queue", detail: "Certificate wording needs approval before reply.", meta: "Senior owner", badge: "Review", tone: "red" },
     { id: "contact-audit", title: "Audit summary", subtitle: "Internal", detail: "Weekly pack has the latest handoffs and guardrail events.", meta: "Draft", badge: "Draft", tone: "slate" }
   ] : [
-    { id: "contact-sarah", title: "Sarah Martinez", subtitle: "Billing contact", detail: "Duplicate charge needs finance owner approval.", meta: "Due in 22m", badge: "SLA risk", tone: "amber" },
+    { id: "contact-sarah", title: "Sarah Martinez", subtitle: "Billing contact", detail: "Duplicate charge needs finance owner approval.", meta: "Due in 22m", badge: "Due soon", tone: "amber" },
     { id: "contact-jessica", title: "Jessica Cooper", subtitle: "Customer", detail: "Delivery update can be sent with tracking context.", meta: "Ready", badge: "Open", tone: "purple" },
     { id: "contact-finance", title: "Finance owner", subtitle: "Internal", detail: "Refund exception queue has two pending approvals.", meta: "Assigned", badge: "Review", tone: "blue" },
     { id: "contact-support", title: "Support manager", subtitle: "Internal", detail: "Old handoffs can be closed after owner confirmation.", meta: "Today", badge: "Follow-up", tone: "green" }
@@ -13791,19 +13941,19 @@ function CompletedOnboardingDashboard({
     percent: reason.percent
   }));
   const billingListItems: OpsListItem[] = [
-    { id: "billing-plan", title: "Plan and subscription", subtitle: completedLaunchDetails[0].value, detail: launchGateAllowed ? "Workspace is ready to move onto the active launch plan." : "Workspace is in review until the launch checks clear.", meta: launchGateAllowed ? "Ready" : "Review", badge: launchGateAllowed ? "Ready" : "Needs review", tone: launchGateAllowed ? "green" : "amber" },
-    { id: "billing-invoice", title: "Invoice setup", subtitle: "Billing contact", detail: completedLaunchDetails[3].value === "Not provided" ? "Billing contact still needs to be confirmed." : `Use ${completedLaunchDetails[3].value} for launch billing checks.`, meta: "Setup", badge: "Pending", tone: "purple" },
+    { id: "billing-plan", title: "Plan and subscription", subtitle: completedLaunchDetails[0].value, detail: launchGateAllowed ? "Workspace is ready for the active launch plan." : "Workspace is in review until checks clear.", meta: launchGateAllowed ? "Ready" : "Review", badge: launchGateAllowed ? "Ready" : "Needs review", tone: launchGateAllowed ? "green" : "amber" },
+    { id: "billing-invoice", title: "Invoice setup", subtitle: "Billing contact", detail: completedLaunchDetails[3].value === "Not provided" ? "Billing contact still needs to be confirmed." : `Use ${completedLaunchDetails[3].value} for billing checks.`, meta: "Setup", badge: "Pending", tone: "purple" },
     { id: "billing-usage", title: "Usage summary", subtitle: "Today", detail: `${liveMetrics.callsHandled} calls tracked with ${liveMetrics.handoffs} review items.`, meta: "Live", badge: "Usage", tone: "blue" },
-    { id: "billing-proof", title: "Launch proof", subtitle: "Gate report", detail: launchGateAllowed ? "All critical launch checks are clear." : launchGateFixSummary, meta: `${launchGateScore}%`, badge: "Gate", tone: launchGateAllowed ? "green" : "red" }
+    { id: "billing-proof", title: "Readiness check", subtitle: "Launch status", detail: launchGateAllowed ? "All critical checks are clear." : launchGateFixSummary, meta: `${launchGateScore}%`, badge: "Checks", tone: launchGateAllowed ? "green" : "red" }
   ];
   const billingRows = [
     { label: "Customer", value: completedLaunchDetails[0].value, note: "Billing account" },
     { label: "Business type", value: completedLaunchDetails[1].value, note: "Plan context" },
     { label: "Phone contact", value: completedLaunchDetails[3].value, note: "Billing and launch contact" },
-    { label: "Launch score", value: `${launchGateScore}%`, note: launchGateAllowed ? "Ready for activation" : launchGateStatusDetail }
+    { label: "Readiness", value: `${launchGateScore}%`, note: launchGateAllowed ? "Ready for activation" : launchGateStatusDetail }
   ];
   const billingSystemRows = completedLaunchSystems.length
-    ? completedLaunchSystems.map((system) => ({ label: system, value: "Submitted", note: "Included in launch billing scope" }))
+    ? completedLaunchSystems.map((system) => ({ label: system, value: "Submitted", note: "Included in scope" }))
     : [{ label: "Connected systems", value: "None submitted", note: "Confirm required systems before activation" }];
   const opsDashboardPages: Partial<Record<string, OpsPageConfig>> = {
     metrics: {
@@ -15431,7 +15581,7 @@ function CompletedOnboardingDashboard({
                             ))}
                           </div>
                           <footer className="completed-inbox-footer">
-                            <span>Showing {visibleInboxThreads.length} of {inboxThreads.length} conversations</span>
+                            <span>{visibleInboxThreads.length} of {inboxThreads.length} conversations</span>
                           </footer>
                         </aside>
 
@@ -15455,7 +15605,7 @@ function CompletedOnboardingDashboard({
                               </button>
                               {!activeInboxThread.joined ? (
                                 <button className="is-join" type="button" onClick={() => joinInboxChat(activeInboxThread.id)}>
-                                  Join chat
+                                  Take over chat
                                 </button>
                               ) : null}
                             </div>
@@ -15497,7 +15647,7 @@ function CompletedOnboardingDashboard({
                                 }
                               }}
                               aria-label={inboxComposerMode === "note" ? "Write a private note" : "Write a reply"}
-                              placeholder={inboxComposerMode === "note" ? "Write a private note - the customer won't see this..." : "Write a reply... (Enter to send)"}
+                              placeholder={inboxComposerMode === "note" ? "Private note..." : "Write a reply..."}
                             />
                             <div>
                               <button type="button" onClick={() => insertInboxSuggestion(activeInboxThread.suggestedReplies[0] || "")} disabled={!activeInboxThread.suggestedReplies.length}>Use AI reply</button>
@@ -15546,7 +15696,7 @@ function CompletedOnboardingDashboard({
                                 <button className="is-solve" type="button" onClick={() => resolveInboxChat(activeInboxThread.id)}> Mark solved</button>
                               )}
                               <button type="button" onClick={() => escalateInboxChat(activeInboxThread.id)} disabled={activeInboxThread.status === "Needs Review"}>
-                                {activeInboxThread.status === "Needs Review" ? "With the team" : "Send to team"}
+                                {activeInboxThread.status === "Needs Review" ? "With the team" : "Escalate to teammate"}
                               </button>
                             </div>
                           </section>

@@ -38685,3 +38685,308 @@ h1 span:last-child {
     justify-self: start;
   }
 }
+
+/* Dashboard simplification pass. */
+.completed-ops-page {
+  gap: 16px;
+}
+
+.completed-ops-header h2 {
+  font-size: 29px;
+  font-weight: 810;
+}
+
+.completed-ops-header p {
+  max-width: 62ch;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 520;
+}
+
+.completed-ops-actions button,
+.completed-ops-hero nav button,
+.completed-ops-add,
+.completed-ops-next button {
+  min-height: 44px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.completed-ops-actions button:focus-visible,
+.completed-ops-hero nav button:focus-visible,
+.completed-ops-add:focus-visible,
+.completed-ops-next button:focus-visible,
+.completed-ops-list > button:focus-visible,
+.completed-thread-list.completed-metrics-nav button:focus-visible,
+.completed-ai-chat-tab:focus-visible,
+.completed-account:focus-visible,
+.completed-conversation-filter:focus-visible,
+.completed-chat-header button:focus-visible,
+.completed-calls-tabs button:focus-visible,
+.completed-agents-tabs button:focus-visible {
+  outline: 3px solid rgba(124, 58, 237, 0.28);
+  outline-offset: 2px;
+}
+
+.completed-ops-kpi-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.completed-ops-kpi-grid article {
+  min-height: 108px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 18px 20px;
+}
+
+.completed-ops-kpi-grid article + article {
+  border-left: 1px solid #eef1f6;
+}
+
+.completed-ops-kpi-grid i {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  font-size: 12px;
+}
+
+.completed-ops-kpi-grid strong {
+  font-size: 24px;
+  font-weight: 810;
+}
+
+.completed-ops-kpi-grid small {
+  color: #047857;
+  font-weight: 720;
+}
+
+.completed-ops-kpi-grid article.is-amber small,
+.completed-ops-kpi-grid article.is-slate small {
+  color: #92400e;
+}
+
+.completed-ops-kpi-grid article.is-red small {
+  color: #b91c1c;
+}
+
+.completed-ops-list-panel,
+.completed-ops-detail,
+.completed-ops-side-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.completed-ops-list-panel {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.completed-ops-list {
+  min-height: 0;
+  padding: 12px;
+}
+
+.completed-ops-list > button {
+  min-height: 74px;
+}
+
+.completed-ops-list p {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.completed-ops-detail,
+.completed-ops-side {
+  gap: 0;
+}
+
+.completed-ops-hero,
+.completed-ops-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.completed-ops-hero {
+  border-bottom: 1px solid #eef1f6;
+  padding: 22px 22px 18px;
+}
+
+.completed-ops-hero h3 {
+  font-size: 20px;
+  font-weight: 810;
+}
+
+.completed-ops-card {
+  padding: 18px 22px;
+}
+
+.completed-ops-card + .completed-ops-card,
+.completed-ops-side-panel > header {
+  border-top: 1px solid #eef1f6;
+}
+
+.completed-ops-card > header {
+  margin-bottom: 11px;
+}
+
+.completed-ops-card h3,
+.completed-ops-side-panel > header h3 {
+  font-weight: 780;
+}
+
+.completed-ops-side-panel > header {
+  padding: 18px 20px 8px;
+}
+
+.completed-ops-side-panel > header h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.completed-ops-rows > article,
+.completed-ops-bars article {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 0;
+}
+
+.completed-ops-rows > article + article,
+.completed-ops-bars article + article {
+  border-top: 1px solid #f1f5f9;
+}
+
+.completed-ops-next {
+  padding: 0 20px 20px;
+}
+
+.completed-ops-next button {
+  border-color: transparent;
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+.completed-ops-next small {
+  color: #6d28d9;
+}
+
+.completed-calls-tabs button,
+.completed-conversation-filter,
+.completed-agents-tabs button,
+.completed-chat-header button,
+.completed-inbox-search button,
+.completed-reply-panel button {
+  min-height: 44px;
+}
+
+@media (max-width: 1180px) {
+  .completed-conversations-shell {
+    grid-template-columns: minmax(270px, 0.9fr) minmax(420px, 1.1fr);
+  }
+
+  .completed-customer-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .completed-dashboard:has(.completed-route-page.is-ops),
+  .completed-dashboard:has(.completed-route-page.is-conversations),
+  .completed-dashboard:has(.completed-route-page.is-calls),
+  .completed-dashboard:has(.completed-route-page.is-agents),
+  .completed-dashboard:has(.completed-route-page.is-integrations) {
+    grid-template-columns: 64px minmax(0, 1fr) !important;
+  }
+
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-sidebar,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-sidebar,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-sidebar,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-sidebar,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-sidebar {
+    align-items: center !important;
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    padding: 12px 8px !important;
+  }
+
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-brand,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-brand,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-brand,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-brand,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-brand {
+    width: 42px !important;
+    min-height: 42px !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+  }
+
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-brand img,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-brand img,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-brand img,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-brand img,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-brand img {
+    width: 42px !important;
+    max-width: none !important;
+  }
+
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-thread-list.completed-metrics-nav button,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-thread-list.completed-metrics-nav button,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-thread-list.completed-metrics-nav button,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-thread-list.completed-metrics-nav button,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-thread-list.completed-metrics-nav button,
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-ai-chat-tab,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-ai-chat-tab,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-ai-chat-tab,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-ai-chat-tab,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-ai-chat-tab {
+    grid-template-columns: 40px !important;
+    justify-content: center !important;
+    width: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+  }
+
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-thread-list.completed-metrics-nav span,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-thread-list.completed-metrics-nav span,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-thread-list.completed-metrics-nav span,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-thread-list.completed-metrics-nav span,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-thread-list.completed-metrics-nav span,
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-ai-chat-tab strong,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-ai-chat-tab strong,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-ai-chat-tab strong,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-ai-chat-tab strong,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-ai-chat-tab strong,
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-metrics-account div,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-metrics-account div,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-metrics-account div,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-metrics-account div,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-metrics-account div,
+  .completed-dashboard:has(.completed-route-page.is-ops) .completed-metrics-account b,
+  .completed-dashboard:has(.completed-route-page.is-conversations) .completed-metrics-account b,
+  .completed-dashboard:has(.completed-route-page.is-calls) .completed-metrics-account b,
+  .completed-dashboard:has(.completed-route-page.is-agents) .completed-metrics-account b,
+  .completed-dashboard:has(.completed-route-page.is-integrations) .completed-metrics-account b {
+    display: none !important;
+  }
+
+  .completed-ops-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .completed-ops-kpi-grid article + article {
+    border-top: 1px solid #eef1f6;
+    border-left: 0;
+  }
+}
